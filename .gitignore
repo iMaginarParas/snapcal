@@ -1,0 +1,60 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+# If you use pub run build_runner build --delete-conflicting-outputs
+lib/**/*.g.dart
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
+project.properties
+*.apk
+*.aab
+*.bin
+
+# iOS
+.generated/
+Flutter/Flutter.framework
+Flutter/Flutter.podspec
+Flutter/Generated.xcconfig
+Flutter/ephemeral/
+Pods/
+ServiceDefinitions.json
+Runner/GeneratedPluginRegistrant.h
+Runner/GeneratedPluginRegistrant.m
+*.xcworkspace
+*.xcscheme
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+
+# Backend (Separated Repository)
+backend/
+docker-compose.yml
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Gemini/Agentic
+.gemini/
+build_error.txt
+build_log.txt
+build_log_utf8.txt
+gradle_log.txt
+gradle_log_utf8.txt
+implementation_plan.md
