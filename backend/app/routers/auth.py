@@ -1,0 +1,78 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from datetime import timedelta
+from jose import JWTError, jwt
+
+from .. import database
+from ..models.user import User
+from ..schemas import schemas
+from ..utils import auth_utils
+from ..utils.limiter import limiter
+from ..services.analytics_service import track_event, identify_user
+from ..services.metrics_service import record_metric
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, auth_utils.SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = schemas.TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+    user = db.query(User).filter(User.email == token_data.email).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+@router.post("/register", response_model=schemas.UserOut)
+@limiter.limit("5/minute")
+def register(request: Request, user: schemas.UserCreate, db: Session = Depends(database.get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if db_user:
+        # Log potential reconnaissance/brute force on emails
+        record_metric("security_event", tags={"type": "registration_failure", "reason": "email_exists"})
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_password = auth_utils.get_password_hash(user.password)
+    new_user = User(email=user.email, password_hash=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    identify_user(user_id=new_user.id, properties={"email": new_user.email})
+    track_event(user_id=new_user.id, event_name="user_registered")
+
+    return new_user
+
+@router.post("/login", response_model=schemas.Token)
+@limiter.limit("5/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+    
+    if not user or not auth_utils.verify_password(form_data.password, user.password_hash):
+        # Log failed login for security monitoring
+        record_metric("security_event", tags={"type": "login_failure", "user": form_data.username})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    track_event(user_id=user.id, event_name="user_logged_in")
+
+    access_token_expires = timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth_utils.create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}

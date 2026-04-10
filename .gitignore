@@ -35,10 +35,6 @@ Runner/GeneratedPluginRegistrant.m
 *.perspectivev3
 xcuserdata/
 
-# Backend (Separated Repository)
-backend/
-docker-compose.yml
-
 # IDEs
 .idea/
 .vscode/
