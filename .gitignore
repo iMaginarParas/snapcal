@@ -56,7 +56,6 @@ gradle_log_utf8.txt
 implementation_plan.md
 
 # Frontend
-flutter_app/
 
 # Backend
 __pycache__/
