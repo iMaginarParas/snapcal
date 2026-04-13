@@ -6,13 +6,18 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os
+
+if not os.path.exists("static"):
+    os.makedirs("static")
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from .database import engine, Base
-from .routers import auth, meals, steps, devices
+from .routers import auth, meals, steps, devices, chat, water, progress
 from .utils.limiter import limiter
 from .services.metrics_service import track_api_request
 
@@ -24,6 +29,9 @@ from .models.user import User
 from .models.meal import Meal
 from .models.step import Step
 from .models.device_token import DeviceToken
+from .models.chat import ChatMessage
+from .models.water import Water
+from .models.progress import ProgressPhoto
 
 # Initialize Sentry
 sentry_sdk.init(
@@ -101,6 +109,11 @@ app.include_router(auth.router)
 app.include_router(meals.router)
 app.include_router(steps.router)
 app.include_router(devices.router)
+app.include_router(chat.router)
+app.include_router(water.router)
+app.include_router(progress.router)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/health")
 @limiter.limit("100/minute")

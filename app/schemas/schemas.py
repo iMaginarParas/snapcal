@@ -24,6 +24,7 @@ class UserOut(UserBase):
     weight: Optional[float]
     age: Optional[int]
     gender: Optional[str]
+    is_pro: bool
     created_at: datetime
 
     class Config:
@@ -79,3 +80,44 @@ class TokenData(BaseModel):
 class DeviceTokenCreate(BaseModel):
     token: str
     platform: Optional[str] = "android"
+# Chat Schemas
+class ChatMessageCreate(BaseModel):
+    content: str
+    meal_id: Optional[int] = None
+
+class ChatMessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+    meal_id: Optional[int]
+
+    class Config:
+        from_attributes = True
+# Water Schemas
+class WaterCreate(BaseModel):
+    amount_ml: int
+    date: date
+
+class WaterOut(BaseModel):
+    id: int
+    amount_ml: int
+    date: date
+
+    class Config:
+        from_attributes = True
+
+# Progress Schemas
+class ProgressPhotoCreate(BaseModel):
+    weight: Optional[float] = None
+    description: Optional[str] = None
+
+class ProgressPhotoOut(BaseModel):
+    id: int
+    image_url: str
+    weight: Optional[float]
+    description: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

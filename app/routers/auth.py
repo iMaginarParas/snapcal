@@ -76,3 +76,26 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=schemas.UserOut)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@router.put("/profile", response_model=schemas.UserOut)
+def update_profile(
+    profile_data: schemas.UserProfileUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if profile_data.height is not None:
+        current_user.height = profile_data.height
+    if profile_data.weight is not None:
+        current_user.weight = profile_data.weight
+    if profile_data.age is not None:
+        current_user.age = profile_data.age
+    if profile_data.gender is not None:
+        current_user.gender = profile_data.gender
+        
+    db.commit()
+    db.refresh(current_user)
+    return current_user
