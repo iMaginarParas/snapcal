@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/camera_screen.dart';
 import 'screens/steps_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/login_screen.dart';
 import 'services/step_service.dart';
 
 void main() async {
@@ -12,18 +14,22 @@ void main() async {
   final stepService = StepService();
   await stepService.initPlatformState();
 
+  final prefs = await SharedPreferences.getInstance();
+  final hasToken = prefs.getString('token') != null;
+
   runApp(
     MultiProvider(
       providers: [
         Provider<StepService>.value(value: stepService),
       ],
-      child: const FitSnapApp(),
+      child: FitSnapApp(initialRoute: hasToken ? '/' : '/login'),
     ),
   );
 }
 
 class FitSnapApp extends StatelessWidget {
-  const FitSnapApp({super.key});
+  final String initialRoute;
+  const FitSnapApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -44,9 +50,10 @@ class FitSnapApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      initialRoute: '/',
+      initialRoute: initialRoute,
       routes: {
         '/': (context) => const DashboardScreen(),
+        '/login': (context) => const LoginScreen(),
         '/camera': (context) => const CameraScreen(),
         '/steps': (context) => const StepsScreen(),
         '/history': (context) => const HistoryScreen(),
