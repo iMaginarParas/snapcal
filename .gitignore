@@ -54,3 +54,6 @@ build_log_utf8.txt
 gradle_log.txt
 gradle_log_utf8.txt
 implementation_plan.md
+
+# Frontend
+flutter_app/
