@@ -1,2 +1,0 @@
--keep class androidx.health.connect.client.** { *; }
--dontwarn androidx.health.connect.client.**
