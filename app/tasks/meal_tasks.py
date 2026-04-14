@@ -10,8 +10,7 @@ from ..services.analytics_service import track_event, is_feature_enabled
 from ..services.notification_service import notify_user
 from ..services.metrics_service import track_ai_job, record_metric
 
-@celery.task(bind=True, max_retries=3)
-def process_meal(self, meal_id, image_url):
+def process_meal(meal_id, image_url):
     db = SessionLocal()
     meal = db.query(Meal).filter(Meal.id == meal_id).first()
     if not meal:
@@ -29,13 +28,30 @@ def process_meal(self, meal_id, image_url):
             with open(image_url, "rb") as f:
                 image_bytes = f.read()
 
-        # Perform AI inference and measure duration
+        # Perform AI analysis
         start_time = time.time()
-        result = food_detector.predict(image_bytes)
+        
+        from ..services.vision_service import vision_service
+        import asyncio
+        
+        # Try real AI (Gemini)
+        result = None
+        try:
+            result = asyncio.run(vision_service.analyze_meal(image_bytes))
+        except Exception as e:
+            print(f"Gemini Analysis Failed, falling back: {e}")
+
+        # Fallback to Mock/Classifier if needed
+        if not result:
+            result = food_detector.predict(image_bytes)
+            model_used = "mobilenet_v3_fallback"
+        else:
+            model_used = "gemini-1.5-flash"
+            
         duration = time.time() - start_time
         
         # Track AI job metric
-        track_ai_job(model_name="mobilenet_v3", duration_sec=duration)
+        track_ai_job(model_name=model_used, duration_sec=duration)
         
         # Update meal record in database
         meal.food_name = result.get("food_name", "Unknown Food")
@@ -82,11 +98,9 @@ def process_meal(self, meal_id, image_url):
         track_event(
             user_id=meal.user_id,
             event_name="meal_processing_failed",
-            properties={"error": str(exc), "retry_count": self.request.retries}
+            properties={"error": str(exc)}
         )
         
         print(f"Error processing meal {meal_id}: {str(exc)}")
-        # Retry logic
-        raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 import os
@@ -26,6 +26,7 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 @limiter.limit("10/minute")
 async def create_meal(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(database.get_db),
     current_user: User = Depends(get_current_user)
@@ -88,7 +89,7 @@ async def create_meal(
 
     # Trigger background AI analysis
     from ..tasks.meal_tasks import process_meal
-    process_meal.delay(new_meal.id, image_url)
+    background_tasks.add_task(process_meal, new_meal.id, image_url)
 
     # Track meal upload analytics
     from ..services.analytics_service import track_event
