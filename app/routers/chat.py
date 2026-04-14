@@ -75,30 +75,51 @@ async def send_message(
     from ..services.ai_service import ai_coach_service
     response_text = await ai_coach_service.get_response(msg.content, history=history, user_context=user_context)
 
-    # 4. Parse for Commands (Automated Corrections)
-    if "[UPDATE_MEAL:" in response_text:
+    # 4. Parse for Commands (Automated Corrections & Updates)
+    if any(cmd in response_text for cmd in ["[UPDATE_MEAL:", "[UPDATE_STEPS:", "[UPDATE_WATER:"]):
         import json
         import re
         try:
-            match = re.search(r"\[UPDATE_MEAL:(.*?)\]", response_text)
-            if match:
-                update_data = json.loads(match.group(1))
+            # Handle Meal Updates
+            meal_match = re.search(r"\[UPDATE_MEAL:(.*?)\]", response_text)
+            if meal_match:
+                update_data = json.loads(meal_match.group(1))
                 meal_id = msg.meal_id
-                
-                # If no meal_id provided, find the latest one
                 if not meal_id:
                     latest_meal = db.query(Meal).filter(Meal.user_id == current_user.id).order_by(Meal.created_at.desc()).first()
                     if latest_meal:
                         meal_id = latest_meal.id
-                
                 if meal_id:
                     from ..models.meal import Meal as MealModel
                     db.query(MealModel).filter(MealModel.id == meal_id).update(update_data)
                     db.commit()
-                    # Clean up the output text for the user
-                    response_text = re.sub(r"\[UPDATE_MEAL:.*?\]", "✅ I've updated your log as requested.", response_text)
+                    response_text = re.sub(r"\[UPDATE_MEAL:.*?\]", "✅ Meal log updated.", response_text)
+
+            # Handle Step Updates
+            step_match = re.search(r"\[UPDATE_STEPS:(.*?)\]", response_text)
+            if step_match:
+                update_data = json.loads(step_match.group(1))
+                if step_record:
+                    for key, value in update_data.items():
+                        setattr(step_record, key, value)
+                else:
+                    new_step = Step(user_id=current_user.id, date=today, **update_data)
+                    db.add(new_step)
+                db.commit()
+                response_text = re.sub(r"\[UPDATE_STEPS:.*?\]", "✅ Steps updated.", response_text)
+
+            # Handle Water Updates
+            water_match = re.search(r"\[UPDATE_WATER:(.*?)\]", response_text)
+            if water_match:
+                update_data = json.loads(water_match.group(1))
+                # Usually we just add water, but let's allow setting it if AI says so
+                new_water = Water(user_id=current_user.id, date=today, amount_ml=update_data.get("amount_ml", 0))
+                db.add(new_water)
+                db.commit()
+                response_text = re.sub(r"\[UPDATE_WATER:.*?\]", "✅ Water logged.", response_text)
+
         except Exception as e:
-            print(f"Correction Parsing Error: {e}")
+            print(f"Command Parsing Error: {e}")
 
     # 5. Save AI Response
     ai_msg = ChatMessage(
