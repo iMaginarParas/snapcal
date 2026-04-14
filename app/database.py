@@ -11,12 +11,16 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/fitsnap",
 )
 
+# Handle Railway's 'postgres://' vs SQLAlchemy's 'postgresql://' requirement
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Added SSL mode for production databases
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     # Fix for Supabase SSL requirements
-    connect_args={"sslmode": "require"} if "localhost" not in DATABASE_URL else {}
+    connect_args={"sslmode": "require"} if DATABASE_URL and "localhost" not in DATABASE_URL else {}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
