@@ -64,13 +64,6 @@ with engine.connect() as conn:
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             except Exception as inner_e:
                 print(f"Column check for {col_name}: {inner_e}")
-        
-        # ONE-TIME CLEANUP of the users table (requested by user)
-        try:
-            conn.execute(text("TRUNCATE TABLE users CASCADE"))
-            print("DEBUG: Users table cleared for fresh start.")
-        except Exception as truncate_e:
-            print(f"Migration notice (truncate): {truncate_e}")
             
         conn.commit()
         print("DEBUG: Database schema verification completed.")

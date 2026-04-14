@@ -35,9 +35,16 @@ async def send_message(
     # Reverse to get chronological order
     history = [{"role": m.role, "content": m.content} for m in reversed(history_records[:-1])] if len(history_records) > 1 else []
 
-    # 3. Generate AI Response using Gemini
+    # 3. Construct Personal User Context for AI
+    user_context = (
+        f"User Name: {current_user.full_name or 'User'}\n"
+        f"User Stats: {current_user.weight or 'Unknown'}kg, {current_user.height or 'Unknown'}cm, {current_user.age or 'Unknown'} years old.\n"
+        f"Pro Member: {'Yes' if current_user.is_pro else 'No'}\n"
+    )
+
+    # 4. Generate AI Response using Gemini
     from ..services.ai_service import ai_coach_service
-    response_text = await ai_coach_service.get_response(msg.content, history=history)
+    response_text = await ai_coach_service.get_response(msg.content, history=history, user_context=user_context)
 
     # 4. Parse for Commands (Automated Corrections)
     if "[UPDATE_MEAL:" in response_text:

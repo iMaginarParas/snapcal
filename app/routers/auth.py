@@ -46,7 +46,11 @@ def register(request: Request, user: schemas.UserCreate, db: Session = Depends(d
             raise HTTPException(status_code=400, detail="Email already registered")
         
         hashed_password = auth_utils.get_password_hash(user.password)
-        new_user = User(email=user.email, password_hash=hashed_password)
+        new_user = User(
+            email=user.email, 
+            password_hash=hashed_password,
+            full_name=user.full_name
+        )
         
         print("DEBUG: Adding new user to database...")
         db.add(new_user)
@@ -109,6 +113,8 @@ def update_profile(
         current_user.age = profile_data.age
     if profile_data.gender is not None:
         current_user.gender = profile_data.gender
+    if profile_data.full_name is not None:
+        current_user.full_name = profile_data.full_name
         
     db.commit()
     db.refresh(current_user)

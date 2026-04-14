@@ -11,7 +11,7 @@ class AICoachService:
         else:
             self.model = None
 
-    async def get_response(self, user_message: str, history: List[Dict[str, str]] = None) -> str:
+    async def get_response(self, user_message: str, history: List[Dict[str, str]] = None, user_context: str = "") -> str:
         if not self.model:
             return "Staying hydrated is key! I'm currently in a limited mode, but I'm here to support your fitness journey."
 
@@ -25,7 +25,9 @@ class AICoachService:
             "append a command block at the end of your message in this format: [UPDATE_MEAL:{\"food_name\": \"New Name\", \"calories\": 400}].\n"
             "Only include fields that need changing. For example, if they only change the name, use [UPDATE_MEAL:{\"food_name\": \"Salad\"}].\n"
             "If they say 'the AI got it wrong', ask what the correct details are.\n\n"
-            "Be encouraging but firm about health goals."
+            "Be encouraging but firm about health goals.\n\n"
+            f"USER CONTEXT FOR THIS CONVERSATION:\n{user_context}"
+        )
         )
 
         try:
