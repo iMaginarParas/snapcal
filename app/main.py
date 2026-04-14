@@ -46,14 +46,28 @@ sentry_sdk.init(
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# Safety check for missing columns (manual migration)
+# Safety check for missing columns (comprehensive manual migration)
 from sqlalchemy import text
 with engine.connect() as conn:
     try:
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE"))
+        # List of columns to ensure existence
+        columns = [
+            ("height", "FLOAT"),
+            ("weight", "FLOAT"),
+            ("age", "INTEGER"),
+            ("gender", "VARCHAR"),
+            ("is_pro", "BOOLEAN DEFAULT FALSE"),
+            ("created_at", "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+        ]
+        for col_name, col_type in columns:
+            try:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            except Exception as inner_e:
+                print(f"Column check for {col_name}: {inner_e}")
         conn.commit()
+        print("DEBUG: Database schema verification completed.")
     except Exception as e:
-        print(f"Migration notice (is_pro): {e}")
+        print(f"Global Migration check failed: {e}")
 
 
 app = FastAPI(title="FitSnap AI API")
