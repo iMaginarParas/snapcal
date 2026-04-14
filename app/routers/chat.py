@@ -55,15 +55,16 @@ async def send_message(
         .first()
     total_steps = step_record.step_count if step_record else 0
     
-    # Get Today's Water
-    total_water = db.query(func.sum(Water.amount_ml))\
-        .filter(Water.user_id == current_user.id, Water.date == today)\
-        .scalar() or 0
+    # Get Historical Weight Trend
+    from ..models.progress import ProgressPhoto
+    recent_photos = db.query(ProgressPhoto).filter(ProgressPhoto.user_id == current_user.id).order_by(ProgressPhoto.created_at.desc()).limit(5).all()
+    weight_trend = ", ".join([f"{p.weight}kg on {p.created_at.date()}" for p in recent_photos if p.weight])
 
     # 3. Construct Personal User Context for AI
     user_context = (
         f"User Name: {current_user.full_name or 'User'}\n"
         f"User Stats: {current_user.weight or 'Unknown'}kg, {current_user.height or 'Unknown'}cm, {current_user.age or 'Unknown'} years old.\n"
+        f"Weight Trend: {weight_trend or 'No history yet'}\n"
         f"Pro Member: {'Yes' if current_user.is_pro else 'No'}\n"
         f"TODAY'S PROGRESS ({today}):\n"
         f"- Calories Consumed: {total_calories:.0f} kcal\n"
@@ -71,9 +72,23 @@ async def send_message(
         f"- Water Intake: {total_water} ml\n"
     )
 
-    # 4. Generate AI Response using Gemini
+    # 4. Handle Image Data if provided
+    image_bytes = None
+    if msg.image_base64:
+        import base64
+        try:
+            image_bytes = base64.b64decode(msg.image_base64)
+        except Exception as e:
+            print(f"Image Decode Error: {e}")
+
+    # 5. Generate AI Response using Gemini Multimodal
     from ..services.ai_service import ai_coach_service
-    response_text = await ai_coach_service.get_response(msg.content, history=history, user_context=user_context)
+    response_text = await ai_coach_service.get_response(
+        msg.content, 
+        history=history, 
+        user_context=user_context,
+        image_bytes=image_bytes
+    )
 
     # 4. Parse for Commands (Automated Corrections & Updates)
     if any(cmd in response_text for cmd in ["[UPDATE_MEAL:", "[UPDATE_STEPS:", "[UPDATE_WATER:"]):

@@ -87,6 +87,7 @@ class DeviceTokenCreate(BaseModel):
 class ChatMessageCreate(BaseModel):
     content: str
     meal_id: Optional[int] = None
+    image_base64: Optional[str] = None # For direct image analysis in chat
 
 class ChatMessageOut(BaseModel):
     id: int

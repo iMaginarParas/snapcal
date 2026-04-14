@@ -11,23 +11,19 @@ class AICoachService:
         else:
             self.model = None
 
-    async def get_response(self, user_message: str, history: List[Dict[str, str]] = None, user_context: str = "") -> str:
+    async def get_response(self, user_message: str, history: List[Dict[str, str]] = None, user_context: str = "", image_bytes: bytes = None) -> str:
         if not self.model:
             return "Staying hydrated is key! I'm currently in a limited mode, but I'm here to support your fitness journey."
 
-        # Prepare context with correction capabilities
+        # Prepare context with Vision and Coaching capabilities
         system_prompt = (
-            "You are FitSnap AI Coach, an elite health and nutrition expert. "
-            "Your personality is highly professional, data-driven, yet empathetic and supportive. "
-            "You focus on helping users maintain their calorie deficit or surplus goals and optimizing macro-nutrients.\n\n"
-            "KNOWLEDGE OF TODAY: You have real-time access to the user's calories, steps, and water intake for today. "
-            "Use this data to give specific advice (e.g., 'You've only had 500ml of water, try to drink more' or 'You have 400 calories left for dinner').\n\n"
-            "SPECIAL CAPABILITY: You can update any health log. "
-            "If the user wants to change a meal, append: [UPDATE_MEAL:{\"food_name\": \"Name\", \"calories\": 300}]. "
-            "If they want to set steps, append: [UPDATE_STEPS:{\"step_count\": 10000}]. "
-            "If they want to log water, append: [UPDATE_WATER:{\"amount_ml\": 500}].\n\n"
-            "COACHING PLAN: Always provide specific, actionable workout and meal plans if asked. "
-            "Use the user's current stats (BMI, weight, today's calories) to verify if they are on track.\n\n"
+            "You are FitSnap AI Coach, an elite health and nutrition expert with VISION capabilities. "
+            "Your personality is highly professional, data-driven, yet empathetic and supportive.\n\n"
+            "VISION CAPABILITY: If you receive an image, analyze the food items, estimate portions, and calculate calories and macros. "
+            "Always respond with your analysis AND append a command block: [UPDATE_MEAL:{\"food_name\": \"...\", \"calories\": ..., \"protein\": ..., \"carbs\": ..., \"fat\": ...}].\n\n"
+            "HISTORICAL ANALYSIS: Use the user's historical context provided below to notice trends (weight loss, calorie intake habits) and comment on them positively or with corrective advice.\n\n"
+            "SPECIAL COMMANDS: "
+            "Update any log: [UPDATE_MEAL:{...}], [UPDATE_STEPS:{\"step_count\": ...}], [UPDATE_WATER:{\"amount_ml\": ...}].\n\n"
             "Be encouraging but firm about health goals.\n\n"
             f"USER CONTEXT FOR THIS CONVERSATION:\n{user_context}"
         )
@@ -49,7 +45,14 @@ class AICoachService:
             # Re-initialize chat with history
             chat = self.model.start_chat(history=gemini_history)
             
-            response = chat.send_message(f"{system_prompt}\n\nUser: {user_message}")
+            message_parts = [f"{system_prompt}\n\nUser: {user_message}"]
+            if image_bytes:
+                message_parts.append({
+                    "mime_type": "image/jpeg",
+                    "data": image_bytes
+                })
+            
+            response = chat.send_message(message_parts)
             return response.text
         except Exception as e:
             print(f"AI Service Error: {e}")
