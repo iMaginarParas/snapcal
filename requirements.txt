@@ -25,3 +25,4 @@ locust
 posthog
 firebase-admin
 Pillow
+google-generativeai

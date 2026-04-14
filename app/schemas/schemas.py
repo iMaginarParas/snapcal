@@ -5,6 +5,7 @@ from datetime import datetime, date
 # Auth Schemas
 class UserBase(BaseModel):
     email: EmailStr
+    full_name: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
@@ -13,6 +14,7 @@ class UserLogin(UserBase):
     password: str
 
 class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
     height: Optional[float] = None
     weight: Optional[float] = None
     age: Optional[int] = None
@@ -46,6 +48,7 @@ class MealOut(MealBase):
     id: int
     user_id: int
     image_url: Optional[str]
+    status: str
     created_at: datetime
 
     class Config:
