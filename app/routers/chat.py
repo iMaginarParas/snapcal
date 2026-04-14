@@ -6,12 +6,16 @@ from ..models.chat import ChatMessage
 from ..models.user import User
 from ..schemas import schemas
 from .auth import get_current_user
+from ..utils.limiter import limiter
+from fastapi import Request
 import random
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 @router.post("/", response_model=schemas.ChatMessageOut)
+@limiter.limit("10/minute")
 async def send_message(
+    request: Request,
     msg: schemas.ChatMessageCreate,
     db: Session = Depends(database.get_db),
     current_user: User = Depends(get_current_user)
