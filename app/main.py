@@ -43,8 +43,18 @@ sentry_sdk.init(
     environment="production",
 )
 
-# Create tables (for local dev)
+# Create tables
 Base.metadata.create_all(bind=engine)
+
+# Safety check for missing columns (manual migration)
+from sqlalchemy import text
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE"))
+        conn.commit()
+    except Exception as e:
+        print(f"Migration notice (is_pro): {e}")
+
 
 app = FastAPI(title="FitSnap AI API")
 
