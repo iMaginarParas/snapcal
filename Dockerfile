@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Run migrations then start uvicorn
-CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
