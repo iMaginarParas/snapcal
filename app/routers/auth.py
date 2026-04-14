@@ -38,22 +38,36 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @router.post("/register", response_model=schemas.UserOut)
 @limiter.limit("5/minute")
 def register(request: Request, user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
-        # Log potential reconnaissance/brute force on emails
-        record_metric("security_event", tags={"type": "registration_failure", "reason": "email_exists"})
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = auth_utils.get_password_hash(user.password)
-    new_user = User(email=user.email, password_hash=hashed_password)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    print(f"DEBUG: Registration attempt for email: {user.email}")
+    try:
+        db_user = db.query(User).filter(User.email == user.email).first()
+        if db_user:
+            print(f"DEBUG: Registration failed - Email already exists: {user.email}")
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        hashed_password = auth_utils.get_password_hash(user.password)
+        new_user = User(email=user.email, password_hash=hashed_password)
+        
+        print("DEBUG: Adding new user to database...")
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        print(f"DEBUG: User created successfully with ID: {new_user.id}")
 
-    identify_user(user_id=new_user.id, properties={"email": new_user.email})
-    track_event(user_id=new_user.id, event_name="user_registered")
+        try:
+            identify_user(user_id=new_user.id, properties={"email": new_user.email})
+            track_event(user_id=new_user.id, event_name="user_registered")
+        except Exception as e:
+            print(f"DEBUG: Analytics tracking failed (non-critical): {str(e)}")
 
-    return new_user
+        return new_user
+    except Exception as e:
+        print(f"ERROR during registration: {str(e)}")
+        # If it's already an HTTPException, re-raise it
+        if isinstance(e, HTTPException):
+            raise e
+        # Otherwise, raise a 500 with the error detail
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.post("/login", response_model=schemas.Token)
 @limiter.limit("5/minute")
