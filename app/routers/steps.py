@@ -10,7 +10,6 @@ from ..schemas import schemas
 from .auth import get_current_user
 from ..services.analytics_service import track_event
 from ..services.cache_service import get_cache, set_cache, invalidate_cache
-from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(prefix="/steps", tags=["steps"])
 
@@ -87,5 +86,5 @@ def get_today_steps(
         set_cache(cache_key, result)
         return result
     
-    set_cache(cache_key, jsonable_encoder(db_step))
+    set_cache(cache_key, schemas.StepOut.model_validate(db_step).model_dump(mode="json"))
     return db_step

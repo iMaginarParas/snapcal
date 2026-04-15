@@ -16,5 +16,10 @@ class Step(Base):
 
     user = relationship("User", back_populates="steps")
 
+    @property
+    def step_count(self) -> int:
+        """Alias for 'steps' column — required by StepOut Pydantic schema."""
+        return self.steps
+
 # Composite index for daily lookups
 Index("idx_steps_user_date", Step.user_id, Step.date)
