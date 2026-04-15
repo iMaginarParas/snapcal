@@ -79,7 +79,7 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
-# Device/Push Gechemas
+# Device/Push Schemas
 class DeviceTokenCreate(BaseModel):
     token: str
     platform: Optional[str] = "android"
