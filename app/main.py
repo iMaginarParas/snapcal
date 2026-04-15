@@ -52,6 +52,7 @@ with engine.connect() as conn:
     try:
         # List of columns to ensure existence
         columns = [
+            ("full_name", "VARCHAR"),
             ("height", "FLOAT"),
             ("weight", "FLOAT"),
             ("age", "INTEGER"),
