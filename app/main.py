@@ -17,7 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from .database import engine, Base
-from .routers import auth, meals, steps, devices, chat, water, progress
+from .routers import auth, meals, steps, devices, water, progress, measurements, medical_history, suggestions
 from .utils.limiter import limiter
 from .services.metrics_service import track_api_request
 
@@ -29,9 +29,10 @@ from .models.user import User
 from .models.meal import Meal
 from .models.step import Step
 from .models.device_token import DeviceToken
-from .models.chat import ChatMessage
 from .models.water import Water
 from .models.progress import ProgressPhoto
+from .models.measurement import Measurement
+from .models.medical_history import MedicalHistory
 
 # Initialize Sentry
 sentry_sdk.init(
@@ -135,9 +136,11 @@ app.include_router(auth.router)
 app.include_router(meals.router)
 app.include_router(steps.router)
 app.include_router(devices.router)
-app.include_router(chat.router)
 app.include_router(water.router)
 app.include_router(progress.router)
+app.include_router(measurements.router)
+app.include_router(medical_history.router)
+app.include_router(suggestions.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -20,3 +20,5 @@ class User(Base):
     meals = relationship("Meal", back_populates="user")
     steps = relationship("Step", back_populates="user")
     devices = relationship("DeviceToken", back_populates="user")
+    measurements = relationship("Measurement", back_populates="user")
+    medical_history = relationship("MedicalHistory", back_populates="user", uselist=False)
