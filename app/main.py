@@ -136,7 +136,6 @@ async def limit_upload_size(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(meals.router)
 app.include_router(steps.router)
-app.include_router(devices.router)
 app.include_router(water.router)
 app.include_router(progress.router)
 app.include_router(measurements.router)
