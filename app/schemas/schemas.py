@@ -39,6 +39,12 @@ class MealBase(BaseModel):
     protein: float
     carbs: float
     fat: float
+    fiber: Optional[float] = 0.0
+    sugar: Optional[float] = 0.0
+    sodium: Optional[float] = 0.0
+    cholesterol: Optional[float] = 0.0
+    potassium: Optional[float] = 0.0
+    saturates: Optional[float] = 0.0
     portion_size: Optional[str] = None
 
 class MealCreate(MealBase):
@@ -79,25 +85,13 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
-# Device/Push Schemas
-class DeviceTokenCreate(BaseModel):
-    token: str
-    platform: Optional[str] = "android"
-# Chat Schemas
-class ChatMessageCreate(BaseModel):
-    content: str
-    meal_id: Optional[int] = None
-    image_base64: Optional[str] = None # For direct image analysis in chat
+class MealManualCreate(BaseModel):
+    food_name: str
+    calories: float
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
 
-class ChatMessageOut(BaseModel):
-    id: int
-    role: str
-    content: str
-    created_at: datetime
-    meal_id: Optional[int]
-
-    class Config:
-        from_attributes = True
 # Water Schemas
 class WaterCreate(BaseModel):
     amount_ml: int
@@ -121,6 +115,24 @@ class ProgressPhotoOut(BaseModel):
     image_url: str
     weight: Optional[float]
     description: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Exercise Schemas
+class ExerciseBase(BaseModel):
+    name: str
+    duration_minutes: int
+    calories_burned: float
+    date: date
+
+class ExerciseCreate(ExerciseBase):
+    pass
+
+class ExerciseOut(ExerciseBase):
+    id: int
+    user_id: int
     created_at: datetime
 
     class Config:

@@ -27,13 +27,17 @@ async def get_daily_suggestions(
         .scalar() or 0
     
     meals = db.query(Meal).filter(Meal.user_id == current_user.id, func.date(Meal.created_at) == today).all()
-    meal_list = ", ".join([m.food_name for m in meals])
+    meal_list = ", ".join([f"{m.food_name} ({m.calories} kcal)" for m in meals])
 
     step_record = db.query(Step)\
         .filter(Step.user_id == current_user.id, Step.date == today)\
         .first()
     total_steps = step_record.step_count if step_record else 0
     
+    water_record = db.query(func.sum(Water.amount_ml))\
+        .filter(Water.user_id == current_user.id, Water.date == today)\
+        .scalar() or 0
+
     medical = db.query(MedicalHistory).filter(MedicalHistory.user_id == current_user.id).first()
     medical_info = (
         f"Diabetic: {medical.is_diabetic if medical else False}, "
@@ -42,28 +46,41 @@ async def get_daily_suggestions(
     )
 
     measurement = db.query(Measurement).filter(Measurement.user_id == current_user.id).order_by(Measurement.created_at.desc()).first()
-    measurement_info = f"Waist: {measurement.waist if measurement else 'Unknown'} cm"
+    measurement_info = f"Latest Weight: {measurement.weight if measurement else 'Unknown'} kg, Waist: {measurement.waist if measurement else 'Unknown'} cm"
 
-    # 2. Construct Prompt
+    # 3. Get Current Time
+    from datetime import datetime
+    current_time = datetime.now().strftime("%I:%M %p")
+
+    # 4. Construct Routine-Aware Prompt
     prompt = (
-        f"Analyze this user's day so far and provide TWO highly personalized, concise suggestions (one for FOOD, one for EXERCISE).\n\n"
-        f"CONTEXT:\n"
+        f"You are the Preferred AI Health Coach. Analyze the user's routine TODAY and provide proactive advice.\n\n"
+        f"CURRENT TIME: {current_time}\n"
+        f"USER PROFILE:\n"
         f"- Name: {current_user.full_name}\n"
         f"- Medical: {medical_info}\n"
-        f"- Today's Meals: {meal_list if meal_list else 'No meals logged yet'}\n"
-        f"- Today's Calories: {total_calories:.0f} kcal\n"
-        f"- Today's Steps: {total_steps} steps\n"
-        f"- Measurements: {measurement_info}\n\n"
-        f"FORMAT: Return exactly two paragraphs. Start first with 'FOOD:' and second with 'EXERCISE:'. Be professional, encouraging, and medically safe."
+        f"- {measurement_info}\n\n"
+        f"TODAY'S ROUTINE SO FAR:\n"
+        f"- Meals: {meal_list if meal_list else 'No meals logged yet'}\n"
+        f"- Total Calories: {total_calories:.0f} kcal\n"
+        f"- Total Steps: {total_steps} steps\n"
+        f"- Water Intake: {water_record} ml\n\n"
+        f"TASK:\n"
+        f"Provide TWO proactive, concise suggestions based on the CURRENT TIME and their ROUTINE.\n"
+        f"- If it's late and steps are low, suggest a quick walk.\n"
+        f"- If they've eaten heavy, suggest a light next meal.\n"
+        f"- If they are dehydrated, remind them of water.\n"
+        f"- ALWAYS consider their medical conditions (e.g., if diabetic, watch sugar).\n\n"
+        f"FORMAT: Return exactly two paragraphs. Start first with 'FOOD:' and second with 'EXERCISE:'. Be professional and supportive."
     )
 
-    # 3. Call AI Service
+    # 5. Call AI Service
     try:
-        response_text = await ai_coach_service.get_response(prompt, history=[], user_context="You are a health suggestion agent.")
+        response_text = await ai_coach_service.get_response(prompt, history=[], user_context="You are a proactive health suggestion agent.")
         
         # Simple parsing
-        food_sugg = "Log some meals to get food suggestions!"
-        exe_sugg = "Keep moving to reach your goals!"
+        food_sugg = "Log your meals to get personalized food advice for your routine!"
+        exe_sugg = "Keep moving! Every step counts towards your daily goal."
         
         if "FOOD:" in response_text and "EXERCISE:" in response_text:
             parts = response_text.split("EXERCISE:")
@@ -75,12 +92,13 @@ async def get_daily_suggestions(
         return {
             "food_suggestion": food_sugg,
             "exercise_suggestion": exe_sugg,
-            "date": today.isoformat()
+            "date": today.isoformat(),
+            "time_generated": current_time
         }
     except Exception as e:
         print(f"Suggestion Error: {e}")
         return {
-            "food_suggestion": "Stay hydrated and focus on protein today.",
-            "exercise_suggestion": "Try a 10-minute brisk walk to boost your metabolism.",
+            "food_suggestion": "Stay balanced and focus on hydration for now.",
+            "exercise_suggestion": "A quick 5-minute stretch would be great right now.",
             "date": today.isoformat()
         }

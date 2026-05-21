@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from datetime import date as date_type
+from datetime import date as date_type, timedelta
+from typing import List
 from .. import database
 from ..models.water import Water
 from ..models.user import User
@@ -40,3 +41,24 @@ def update_water(
     db.commit()
     db.refresh(water)
     return water
+
+@router.get("/weekly")
+def get_weekly_water(
+    days: int = Query(7, ge=1, le=30),
+    db: Session = Depends(database.get_db),
+    current_user: User = Depends(get_current_user),
+):
+    start = date_type.today() - timedelta(days=days - 1)
+    records = (
+        db.query(Water)
+        .filter(Water.user_id == current_user.id, Water.date >= start)
+        .order_by(Water.date.asc())
+        .all()
+    )
+    by_date = {r.date.isoformat(): r.amount_ml for r in records}
+    result = []
+    for i in range(days):
+        d = start + timedelta(days=i)
+        key = d.isoformat()
+        result.append({"date": key, "amount_ml": by_date.get(key, 0)})
+    return result

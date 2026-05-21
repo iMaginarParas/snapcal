@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import date
+from datetime import date, timedelta
 
 from .. import database
 from ..models.step import Step
@@ -56,6 +56,21 @@ def update_steps(
     )
 
     return db_step
+
+@router.get("/", response_model=List[schemas.StepOut])
+def get_steps_history(
+    days: int = Query(7, ge=1, le=30),
+    db: Session = Depends(database.get_db),
+    current_user: User = Depends(get_current_user),
+):
+    start = date.today() - timedelta(days=days - 1)
+    records = (
+        db.query(Step)
+        .filter(Step.user_id == current_user.id, Step.date >= start)
+        .order_by(Step.date.asc())
+        .all()
+    )
+    return records
 
 @router.get("/today", response_model=schemas.StepOut)
 def get_today_steps(

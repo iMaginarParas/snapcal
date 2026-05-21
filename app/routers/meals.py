@@ -101,6 +101,29 @@ async def create_meal(
 
     return new_meal
 
+@router.post("/manual", response_model=schemas.MealOut)
+@limiter.limit("20/minute")
+async def create_manual_meal(
+    request: Request,
+    data: schemas.MealManualCreate,
+    db: Session = Depends(database.get_db),
+    current_user: User = Depends(get_current_user),
+):
+    new_meal = Meal(
+        user_id=current_user.id,
+        food_name=data.food_name,
+        calories=data.calories,
+        protein=data.protein,
+        carbs=data.carbs,
+        fat=data.fat,
+        status="completed",
+    )
+    db.add(new_meal)
+    db.commit()
+    db.refresh(new_meal)
+    invalidate_cache(f"meals:{current_user.id}:0:20")
+    return new_meal
+
 @router.get("/", response_model=List[schemas.MealOut])
 def get_meals(
     db: Session = Depends(database.get_db),

@@ -53,21 +53,7 @@ def send_push_notification(token: str, title: str, body: str, data: dict = None)
 
 def notify_user(user_id: int, title: str, body: str, data: dict = None, db=None):
     """
-    Helper to send notifications to ALL registered devices of a user.
+    Push notifications require device registration from the mobile app.
+    Currently disabled until in-app push registration is implemented.
     """
-    from ..models.device_token import DeviceToken
-    
-    if not db:
-        from ..database import SessionLocal
-        db = SessionLocal()
-        close_db = True
-    else:
-        close_db = False
-
-    try:
-        tokens = db.query(DeviceToken).filter(DeviceToken.user_id == user_id).all()
-        for device in tokens:
-            send_push_notification(device.token, title, body, data)
-    finally:
-        if close_db:
-            db.close()
+    logger.info(f"Notification queued for user {user_id}: {title}")
