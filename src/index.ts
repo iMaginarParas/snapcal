@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+// Load environment variables immediately after imports to ensure env vars are available for midlewares
+dotenv.config();
+
 import path from 'path';
 import fs from 'fs';
 import apiRoutes from './routes/api';
@@ -8,8 +11,6 @@ import swaggerDocsRouter from './docs/swagger';
 import { initFallbackDb } from './services/db_fallback';
 import { globalLimiter } from './middleware/rateLimiter';
 import { logger } from './middleware/logger';
-
-dotenv.config();
 
 // Initialize fallback local database structure
 initFallbackDb();
