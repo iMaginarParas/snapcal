@@ -5,8 +5,6 @@ export function envCheck(req: Request, res: Response, next: NextFunction) {
     'GEMINI_API_KEY',
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
-    'ALLOWED_ORIGINS',
-    'LOG_LEVEL',
   ];
   const missing = required.filter(key => !process.env[key]);
   if (missing.length > 0) {
