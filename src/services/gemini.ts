@@ -140,4 +140,20 @@ export const analyzeMealBarcode = async (barcode: string) => {
 };
 
 
+export const generateWorkoutInsight = async (workouts: any[], dailyStats: any) => {
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  const prompt = `Based on the following user data:
+Workouts: ${JSON.stringify(workouts.slice(0, 5))}
+Daily Stats: ${JSON.stringify(dailyStats)}
+Provide a short, motivating, and highly personalized 1-sentence AI insight about their progress. Don't use quotes.`;
 
+  try {
+    const result = await model.generateContent([prompt]);
+    const response = await result.response;
+    return response.text().trim();
+  } catch (error) {
+    console.error("Gemini Insight API Error:", error);
+    return "Keep up the great work! Consistency is the key to your success.";
+  }
+};
