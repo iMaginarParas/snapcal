@@ -220,6 +220,8 @@ router.post('/auth/refresh', authLimiter, validate(z.object({ refreshToken: z.st
     sendError(res, err.message || 'Internal server error', 500);
   }
 });
+
+router.post('/auth/login', authLimiter, validate(loginSchema), async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
 
