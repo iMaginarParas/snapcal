@@ -12,7 +12,9 @@ import { authLimiter } from '../middleware/rateLimiter';
 import { validate, validateQuery } from '../middleware/validation';
 
 const router = Router();
-const isSupabaseLive = process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('placeholder-url');
+const isSupabaseLive = process.env.SUPABASE_URL && 
+  !process.env.SUPABASE_URL.includes('placeholder-url') &&
+  !process.env.SUPABASE_URL.includes('your_supabase_project_url');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
