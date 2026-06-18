@@ -39,6 +39,7 @@ const googleLoginSchema = z.object({
 
 const describeNutritionSchema = z.object({
   description: z.string().min(3, 'Meal description must be at least 3 characters long'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
 });
 
 const updateProfileSchema = z.object({
@@ -55,6 +56,7 @@ const logMealSchema = z.object({
   protein: z.number().nonnegative('Protein must be non-negative').optional().default(0),
   carbs: z.number().nonnegative('Carbs must be non-negative').optional().default(0),
   fats: z.number().nonnegative('Fats must be non-negative').optional().default(0),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
 });
 
 const logWorkoutSchema = z.object({
@@ -94,33 +96,60 @@ const listQuerySchema = z.object({
   limit: z.preprocess((val) => val || '20', z.string().transform(val => parseInt(val) || 20)).default(20 as any),
 });
 
+const mealsQuerySchema = listQuerySchema.extend({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+});
+
 // Helper function to save meal to Supabase if authenticated
-async function saveMealToDb(authHeader: string | undefined, analysisResult: any) {
+async function saveMealToDb(authHeader: string | undefined, analysisResult: any, dateStr?: string) {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-      
-      if (!userError && user) {
-        const { error: dbError } = await supabase
-          .from('meals')
-          .insert([
-            {
-              user_id: user.id,
-              name: analysisResult.name,
-              calories: analysisResult.calories,
-              protein: analysisResult.protein || 0,
-              carbs: analysisResult.carbs || 0,
-              fats: analysisResult.fats || 0
-            }
-          ]);
-        
-        if (dbError) {
-          errorLog(dbError, 'Failed to save meal to Supabase');
+      let userId = '';
+      if (token.startsWith('mock-user-')) {
+        userId = token.replace('mock-user-', '');
+      } else if (isSupabaseLive) {
+        const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+        if (!userError && user) {
+          userId = user.id;
+        }
+      } else {
+        userId = token;
+      }
+
+      if (userId) {
+        const loggedAt = dateStr ? new Date(`${dateStr}T12:00:00.000Z`) : new Date();
+        if (!isSupabaseLive) {
+          fallbackDb.addMeal(userId, {
+            name: analysisResult.name,
+            calories: analysisResult.calories,
+            protein: analysisResult.protein || 0,
+            carbs: analysisResult.carbs || 0,
+            fats: analysisResult.fats || 0,
+            logged_at: loggedAt.toISOString()
+          });
+        } else {
+          const { error: dbError } = await supabase
+            .from('meals')
+            .insert([
+              {
+                user_id: userId,
+                name: analysisResult.name,
+                calories: analysisResult.calories,
+                protein: analysisResult.protein || 0,
+                carbs: analysisResult.carbs || 0,
+                fats: analysisResult.fats || 0,
+                logged_at: loggedAt.toISOString()
+              }
+            ]);
+          
+          if (dbError) {
+            errorLog(dbError, 'Failed to save meal to Supabase');
+          }
         }
       }
     } catch (err) {
-      errorLog(err, 'Supabase Auth error during meal save');
+      errorLog(err, 'Error during meal save');
     }
   }
 }
@@ -371,6 +400,7 @@ router.post('/auth/google-login', authLimiter, validate(googleLoginSchema), asyn
 router.post('/nutrition/analyze', upload.single('image'), async (req: any, res: any) => {
   try {
     let analysisResult;
+    const dateStr = req.body.date;
 
     if (req.file) {
       const base64Image = req.file.buffer.toString('base64');
@@ -382,7 +412,7 @@ router.post('/nutrition/analyze', upload.single('image'), async (req: any, res: 
       return sendError(res, 'No image uploaded or mockImage flag set', 400);
     }
 
-    await saveMealToDb(req.headers.authorization, analysisResult);
+    await saveMealToDb(req.headers.authorization, analysisResult, dateStr);
     sendSuccess(res, analysisResult);
   } catch (error: any) {
     errorLog(error, 'Analyze Nutrition Error');
@@ -413,10 +443,10 @@ router.post('/nutrition/analyze', upload.single('image'), async (req: any, res: 
  */
 router.post('/nutrition/describe', validate(describeNutritionSchema), async (req: any, res: any) => {
   try {
-    const { description } = req.body;
+    const { description, date } = req.body;
     const analysisResult = await analyzeMealText(description);
 
-    await saveMealToDb(req.headers.authorization, analysisResult);
+    await saveMealToDb(req.headers.authorization, analysisResult, date);
     sendSuccess(res, analysisResult);
   } catch (error: any) {
     errorLog(error, 'Describe Nutrition Error');
@@ -437,6 +467,7 @@ router.post('/nutrition/describe', validate(describeNutritionSchema), async (req
 router.post('/nutrition/analyze-label', upload.single('image'), async (req: any, res: any) => {
   try {
     let analysisResult;
+    const dateStr = req.body.date;
 
     if (req.file) {
       const base64Image = req.file.buffer.toString('base64');
@@ -454,7 +485,7 @@ router.post('/nutrition/analyze-label', upload.single('image'), async (req: any,
       return sendError(res, 'No image uploaded or mockImage flag set', 400);
     }
 
-    await saveMealToDb(req.headers.authorization, analysisResult);
+    await saveMealToDb(req.headers.authorization, analysisResult, dateStr);
     sendSuccess(res, analysisResult);
   } catch (error: any) {
     errorLog(error, 'Analyze Label Error');
@@ -738,23 +769,35 @@ router.post('/user/profile/picture', requireAuth, upload.single('image'), async 
  *       200:
  *         description: Success
  */
-router.get('/meals', requireAuth, validateQuery(listQuerySchema), async (req: any, res: any) => {
+router.get('/meals', requireAuth, validateQuery(mealsQuerySchema), async (req: any, res: any) => {
   try {
     const userId = req.user.id;
     const page = req.query.page;
     const limit = req.query.limit;
     const offset = (page - 1) * limit;
+    const dateStr = req.query.date;
 
     if (!isSupabaseLive) {
-      const meals = fallbackDb.getMeals(userId);
+      let meals = fallbackDb.getMeals(userId);
+      if (dateStr) {
+        meals = meals.filter(m => m.logged_at && m.logged_at.split('T')[0] === dateStr);
+      }
       const paginatedMeals = meals.slice(offset, offset + limit);
       return sendSuccess(res, paginatedMeals);
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('meals')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', userId);
+
+    if (dateStr) {
+      query = query
+        .gte('logged_at', `${dateStr}T00:00:00.000Z`)
+        .lte('logged_at', `${dateStr}T23:59:59.999Z`);
+    }
+
+    const { data, error } = await query
       .order('logged_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -801,16 +844,17 @@ router.get('/meals', requireAuth, validateQuery(listQuerySchema), async (req: an
 router.post('/meals', requireAuth, validate(logMealSchema), async (req: any, res: any) => {
   try {
     const userId = req.user.id;
-    const { name, calories, protein, carbs, fats } = req.body;
+    const { name, calories, protein, carbs, fats, date } = req.body;
+    const loggedAt = date ? new Date(`${date}T12:00:00.000Z`) : new Date();
 
     if (!isSupabaseLive) {
-      const meal = fallbackDb.addMeal(userId, { name, calories, protein, carbs, fats });
+      const meal = fallbackDb.addMeal(userId, { name, calories, protein, carbs, fats, logged_at: loggedAt.toISOString() });
       return sendSuccess(res, meal);
     }
 
     const { data, error } = await supabase
       .from('meals')
-      .insert([{ user_id: userId, name, calories, protein, carbs, fats }])
+      .insert([{ user_id: userId, name, calories, protein, carbs, fats, logged_at: loggedAt.toISOString() }])
       .select()
       .single();
 
