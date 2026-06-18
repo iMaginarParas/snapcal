@@ -1,15 +1,8 @@
 import dotenv from 'dotenv';
-import dotenvSafe from 'dotenv-safe';
 import { z } from 'zod';
 
-// Load .env file and ensure required variables are present
+// Load .env file if present (will be ignored if not found, i.e. in containers)
 dotenv.config();
-// dotenv-safe will verify that all variables in .env.example are defined
-// It will also populate process.env with defaults from .env.example if needed
-dotenvSafe.config({
-  example: '.env.example',
-  allowEmptyValues: false,
-});
 
 // Define schema for required environment variables
 const envSchema = z.object({
@@ -21,7 +14,8 @@ const envSchema = z.object({
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
-// Parse and validate environment variables
+// Parse and validate environment variables.
+// Zod will throw a clear error listing any missing required variables.
 export const config: EnvConfig = envSchema.parse(process.env);
 
 export default config;
