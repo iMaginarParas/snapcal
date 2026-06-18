@@ -32,6 +32,9 @@ const loginSchema = z.object({
 
 const googleLoginSchema = z.object({
   idToken: z.string().min(1, 'ID Token is required'),
+  displayName: z.string().optional(),
+  photoUrl: z.string().optional(),
+  email: z.string().optional(),
 });
 
 const describeNutritionSchema = z.object({
@@ -285,13 +288,23 @@ router.post('/auth/login', authLimiter, validate(loginSchema), async (req: any, 
  */
 router.post('/auth/google-login', authLimiter, validate(googleLoginSchema), async (req: any, res: any) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, displayName, photoUrl, email } = req.body;
 
     if (!isSupabaseLive) {
       const mockId = 'google_user_' + Math.random().toString(36).substring(2, 7);
+      const emailVal = email || `${mockId}@gmail.com`;
+      const nameVal = displayName || 'Google User';
+      const picVal = photoUrl || null;
+
+      fallbackDb.updateUser(mockId, {
+        email: emailVal,
+        name: nameVal,
+        profile_picture_url: picVal,
+      });
+
       return sendSuccess(res, {
         token: `mock-user-${mockId}`,
-        user: { id: mockId, email: `${mockId}@gmail.com` }
+        user: { id: mockId, email: emailVal }
       });
     }
 
@@ -302,6 +315,24 @@ router.post('/auth/google-login', authLimiter, validate(googleLoginSchema), asyn
 
     if (error) {
       return sendError(res, error.message, 400);
+    }
+
+    if (data.user) {
+      const googleName = displayName || data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'Guest User';
+      const googleAvatar = photoUrl || data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture || null;
+
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert({
+          id: data.user.id,
+          email: data.user.email,
+          name: googleName,
+          profile_picture_url: googleAvatar,
+        }, { onConflict: 'id' });
+
+      if (upsertError) {
+        logger.warn(`Failed to upsert user profile on Google Sign-In: ${upsertError.message}`);
+      }
     }
 
     sendSuccess(res, {
@@ -477,7 +508,8 @@ export async function requireAuth(req: any, res: any, next: any) {
       return sendError(res, e.message || 'Authentication error', 401);
     }
   } else {
-    req.user = { id: token, email: `${token}@fallback.local` };
+    const userId = token.startsWith('mock-user-') ? token.replace('mock-user-', '') : token;
+    req.user = { id: userId, email: `${userId}@fallback.local` };
     return next();
   }
 }
@@ -509,7 +541,18 @@ router.get('/user/profile', requireAuth, async (req: any, res: any) => {
       .single();
 
     if (error) {
-      const defaultProfile = { id: userId, email: req.user.email, name: 'Guest User', age: 25, weight: 76.4, height: 178, goals: 'Build Muscle' };
+      const googleName = req.user.user_metadata?.full_name || req.user.user_metadata?.name || 'Guest User';
+      const googleAvatar = req.user.user_metadata?.avatar_url || req.user.user_metadata?.picture || null;
+      const defaultProfile = {
+        id: userId,
+        email: req.user.email,
+        name: googleName,
+        profile_picture_url: googleAvatar,
+        age: 25,
+        weight: 76.4,
+        height: 178,
+        goals: 'Build Muscle'
+      };
       const { data: newProfile, error: insertError } = await supabase
         .from('users')
         .insert([defaultProfile])
@@ -520,7 +563,30 @@ router.get('/user/profile', requireAuth, async (req: any, res: any) => {
       return sendSuccess(res, newProfile);
     }
 
-    sendSuccess(res, data);
+    let profileData = data;
+    let needsUpdate = false;
+    const updates: any = {};
+    if (!data.name && (req.user.user_metadata?.full_name || req.user.user_metadata?.name)) {
+      updates.name = req.user.user_metadata.full_name || req.user.user_metadata.name;
+      needsUpdate = true;
+    }
+    if (!data.profile_picture_url && (req.user.user_metadata?.avatar_url || req.user.user_metadata?.picture)) {
+      updates.profile_picture_url = req.user.user_metadata.avatar_url || req.user.user_metadata.picture;
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      const { data: updatedData, error: updateError } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+      if (!updateError && updatedData) {
+        profileData = updatedData;
+      }
+    }
+
+    sendSuccess(res, profileData);
   } catch (error: any) {
     errorLog(error, 'Get Profile Error');
     sendError(res, error.message || 'Failed to retrieve profile', 500);
