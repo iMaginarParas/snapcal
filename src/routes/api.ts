@@ -72,6 +72,12 @@ const updateDailyStatsSchema = z.object({
   water_ml: z.number().nonnegative().optional(),
 });
 
+const logMeasurementSchema = z.object({
+  metric_type: z.enum(['weight', 'waist', 'chest', 'arms', 'thighs', 'strength']),
+  value: z.number().positive('Value must be positive'),
+  date: z.string().optional(),
+});
+
 const barcodeSchema = z.object({
   barcode: z.string().min(1, 'Barcode is required'),
 });
@@ -965,6 +971,164 @@ router.post('/daily-stats', requireAuth, validate(updateDailyStatsSchema), async
   } catch (error: any) {
     errorLog(error, 'Update Daily Stats Error');
     sendError(res, error.message || 'Failed to update stats', 500);
+  }
+});
+
+/**
+ * @openapi
+ * /user/measurements:
+ *   post:
+ *     summary: Log a new body measurement
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - metric_type
+ *               - value
+ *             properties:
+ *               metric_type:
+ *                 type: string
+ *                 enum: [weight, waist, chest, arms, thighs, strength]
+ *               value:
+ *                 type: number
+ *               date:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.post('/user/measurements', requireAuth, validate(logMeasurementSchema), async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { metric_type, value, date } = req.body;
+
+    if (!isSupabaseLive) {
+      const log = fallbackDb.addMeasurement(userId, { metric_type, value, date });
+      return sendSuccess(res, log);
+    }
+
+    const now = new Date();
+    const ListMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedDate = date || `${ListMonths[now.getMonth()]} ${now.getDate().toString().padStart(2, '0')}, ${now.getFullYear()}`;
+
+    const { data, error } = await supabase
+      .from('measurement_logs')
+      .insert([{
+        user_id: userId,
+        metric_type,
+        value,
+        date: formattedDate
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    sendSuccess(res, data);
+  } catch (error: any) {
+    errorLog(error, 'Log Measurement Error');
+    sendError(res, error.message || 'Failed to log measurement', 500);
+  }
+});
+
+/**
+ * @openapi
+ * /user/measurements:
+ *   get:
+ *     summary: Retrieve user's logged measurements
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: metric_type
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.get('/user/measurements', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { metric_type } = req.query;
+
+    if (!isSupabaseLive) {
+      const logs = fallbackDb.getMeasurements(userId, metric_type as string);
+      return sendSuccess(res, logs);
+    }
+
+    let query = supabase
+      .from('measurement_logs')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (metric_type) {
+      query = query.eq('metric_type', metric_type);
+    }
+
+    const { data, error } = await query.order('logged_at', { ascending: false });
+
+    if (error) throw error;
+    sendSuccess(res, data);
+  } catch (error: any) {
+    errorLog(error, 'Get Measurements Error');
+    sendError(res, error.message || 'Failed to retrieve measurements', 500);
+  }
+});
+
+/**
+ * @openapi
+ * /user/measurements/{id}:
+ *   delete:
+ *     summary: Delete a specific measurement log
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.delete('/user/measurements/:id', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    if (!isSupabaseLive) {
+      const success = fallbackDb.deleteMeasurement(userId, id);
+      if (!success) {
+        return sendError(res, 'Measurement log not found', 404);
+      }
+      return sendSuccess(res, { success: true });
+    }
+
+    const { data, error } = await supabase
+      .from('measurement_logs')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return sendError(res, 'Measurement log not found or not owned by user', 404);
+    }
+    
+    sendSuccess(res, { success: true });
+  } catch (error: any) {
+    errorLog(error, 'Delete Measurement Error');
+    sendError(res, error.message || 'Failed to delete measurement', 500);
   }
 });
 

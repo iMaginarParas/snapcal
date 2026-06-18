@@ -123,3 +123,15 @@ CREATE TABLE IF NOT EXISTS public.daily_stats (
 );
 ALTER TABLE public.daily_stats ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own daily stats" ON public.daily_stats FOR ALL USING (auth.uid() = user_id);
+
+-- 4. Create Measurement Logs Table for body weight and measurements tracking
+CREATE TABLE IF NOT EXISTS public.measurement_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    metric_type TEXT NOT NULL, -- 'weight', 'waist', 'chest', 'arms', 'thighs', 'strength'
+    value NUMERIC NOT NULL,
+    logged_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    date TEXT NOT NULL
+);
+ALTER TABLE public.measurement_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own measurements" ON public.measurement_logs FOR ALL USING (auth.uid() = user_id);

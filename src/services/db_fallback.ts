@@ -9,13 +9,15 @@ interface FallbackDb {
   meals: { [id: string]: any[] };
   workouts: { [id: string]: any[] };
   dailyStats: { [id: string]: { [date: string]: any } };
+  measurementLogs: { [id: string]: any[] };
 }
 
 let db: FallbackDb = {
   users: {},
   meals: {},
   workouts: {},
-  dailyStats: {}
+  dailyStats: {},
+  measurementLogs: {}
 };
 
 export function initFallbackDb() {
@@ -30,6 +32,7 @@ export function initFallbackDb() {
       if (!db.meals) db.meals = {};
       if (!db.workouts) db.workouts = {};
       if (!db.dailyStats) db.dailyStats = {};
+      if (!db.measurementLogs) db.measurementLogs = {};
     } catch (e) {
       console.error('Failed to parse fallback storage.json. Initializing empty.');
     }
@@ -122,5 +125,39 @@ export const fallbackDb = {
     db.dailyStats[userId][dateStr] = stats;
     saveDb();
     return stats;
+  },
+  getMeasurements: (userId: string, metricType?: string) => {
+    const logs = db.measurementLogs[userId] || [];
+    if (metricType) {
+      return logs.filter(l => l.metric_type === metricType);
+    }
+    return logs.sort((a, b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
+  },
+  addMeasurement: (userId: string, metric: any) => {
+    if (!db.measurementLogs[userId]) db.measurementLogs[userId] = [];
+    const now = new Date();
+    const ListMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedDate = metric.date || `${ListMonths[now.getMonth()]} ${now.getDate().toString().padStart(2, '0')}, ${now.getFullYear()}`;
+    const newMetric = {
+      id: Math.random().toString(36).substring(2, 11),
+      user_id: userId,
+      metric_type: metric.metric_type,
+      value: metric.value,
+      logged_at: now.toISOString(),
+      date: formattedDate
+    };
+    db.measurementLogs[userId].push(newMetric);
+    saveDb();
+    return newMetric;
+  },
+  deleteMeasurement: (userId: string, id: string) => {
+    if (!db.measurementLogs[userId]) return false;
+    const initialLength = db.measurementLogs[userId].length;
+    db.measurementLogs[userId] = db.measurementLogs[userId].filter(l => l.id !== id);
+    if (db.measurementLogs[userId].length < initialLength) {
+      saveDb();
+      return true;
+    }
+    return false;
   }
 };

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-// Load environment variables immediately after imports to ensure env vars are available for midlewares
+// Load environment variables immediately after imports to ensure env vars are available for middlewares
 dotenv.config();
 
 import path from 'path';
@@ -10,7 +10,11 @@ import apiRoutes from './routes/api';
 import swaggerDocsRouter from './docs/swagger';
 import { initFallbackDb } from './services/db_fallback';
 import { globalLimiter } from './middleware/rateLimiter';
-import { logger } from './middleware/logger';
+import logger from './logger';
+import { corsConfig } from './middleware/corsConfig';
+import { envCheck } from './middleware/envCheck';
+import { httpsRedirect } from './middleware/httpsRedirect';
+import { errorHandler } from './middleware/errorHandler';
 
 // Initialize fallback local database structure
 initFallbackDb();
@@ -24,13 +28,6 @@ if (!fs.existsSync(uploadsDir)) {
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configure CORS Allowed Origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*';
-// CORS configuration is now handled by dedicated middleware
-import { corsConfig } from './middleware/corsConfig';
-import { envCheck } from './middleware/envCheck';
-import { httpsRedirect } from './middleware/httpsRedirect';
-
 // Verify required environment variables before proceeding
 app.use(envCheck);
 
@@ -39,7 +36,6 @@ app.use(httpsRedirect);
 
 // Apply CORS configuration
 corsConfig(app);
-
 
 // Apply Global Rate Limiting
 app.use(globalLimiter);
@@ -58,9 +54,12 @@ if (process.env.NODE_ENV !== 'production') {
 app.use('/api', apiRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy', service: 'Sabtrack API' });
-});
+app.get('/health', (req, res) =>
+  res.status(200).json({ status: 'healthy', service: 'Sabtrack API' })
+);
+
+// Global error handler (must be after all routes)
+app.use(errorHandler);
 
 app.listen(port, () => {
   logger.info(`Server running on port ${port}`);
