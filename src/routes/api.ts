@@ -65,6 +65,12 @@ const logWorkoutSchema = z.object({
   duration_seconds: z.number().int().nonnegative().optional(),
   calories: z.number().nonnegative().optional(),
   route_points: z.array(z.any()).optional(),
+  workout_type: z.enum(['cardio', 'strength']).optional().default('cardio'),
+  category: z.string().optional(),
+  exercises: z.array(z.object({
+    name: z.string(),
+    weight: z.number(),
+  })).optional(),
 });
 
 const dailyStatsQuerySchema = z.object({
@@ -951,10 +957,10 @@ router.get('/workouts', requireAuth, validateQuery(listQuerySchema), async (req:
 router.post('/workouts', requireAuth, validate(logWorkoutSchema), async (req: any, res: any) => {
   try {
     const userId = req.user.id;
-    const { workout_name, distance, duration_seconds, calories, route_points } = req.body;
+    const { workout_name, distance, duration_seconds, calories, route_points, workout_type, category, exercises } = req.body;
 
     if (!isSupabaseLive) {
-      const workout = fallbackDb.addWorkout(userId, { workout_name, distance, duration_seconds, calories, route_points });
+      const workout = fallbackDb.addWorkout(userId, { workout_name, distance, duration_seconds, calories, route_points, workout_type, category, exercises });
       return sendSuccess(res, workout);
     }
 
@@ -967,6 +973,9 @@ router.post('/workouts', requireAuth, validate(logWorkoutSchema), async (req: an
         duration_seconds,
         calories,
         route_points,
+        workout_type: workout_type || 'cardio',
+        category,
+        exercises,
         completed: true,
         completed_at: new Date().toISOString()
       }])
@@ -978,6 +987,56 @@ router.post('/workouts', requireAuth, validate(logWorkoutSchema), async (req: an
   } catch (error: any) {
     errorLog(error, 'Log Workout Error');
     sendError(res, error.message || 'Failed to save workout', 500);
+  }
+});
+
+/**
+ * @openapi
+ * /workouts/{id}:
+ *   delete:
+ *     summary: Delete a specific workout
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.delete('/workouts/:id', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    if (!isSupabaseLive) {
+      const success = fallbackDb.deleteWorkout(userId, id);
+      if (!success) {
+        return sendError(res, 'Workout not found', 404);
+      }
+      return sendSuccess(res, { success: true });
+    }
+
+    const { data, error } = await supabase
+      .from('workouts')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return sendError(res, 'Workout not found or not owned by user', 404);
+    }
+
+    sendSuccess(res, { success: true });
+  } catch (error: any) {
+    errorLog(error, 'Delete Workout Error');
+    sendError(res, error.message || 'Failed to delete workout', 500);
   }
 });
 

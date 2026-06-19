@@ -97,12 +97,25 @@ export const fallbackDb = {
       duration_seconds: workout.duration_seconds || 0,
       calories: workout.calories || 0,
       route_points: workout.route_points || [],
+      workout_type: workout.workout_type || 'cardio',
+      category: workout.category || null,
+      exercises: workout.exercises || null,
       completed: true,
       completed_at: new Date().toISOString()
     };
     db.workouts[userId].push(newWorkout);
     saveDb();
     return newWorkout;
+  },
+  deleteWorkout: (userId: string, id: string) => {
+    if (!db.workouts[userId]) return false;
+    const initialLength = db.workouts[userId].length;
+    db.workouts[userId] = db.workouts[userId].filter(w => w.id !== id);
+    if (db.workouts[userId].length < initialLength) {
+      saveDb();
+      return true;
+    }
+    return false;
   },
   getDailyStats: (userId: string, dateStr: string) => {
     if (!db.dailyStats[userId]) db.dailyStats[userId] = {};

@@ -106,11 +106,14 @@ CREATE POLICY "Users can manage exercises" ON public.workout_exercises FOR ALL U
 -- 1. Alter users table to add profile_picture_url column
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
 
--- 2. Alter workouts table to support live GPS workout details
+-- 2. Alter workouts table to support live GPS workout details and strength workouts
 ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS distance NUMERIC;
 ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS duration_seconds INT;
 ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS calories INT;
 ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS route_points JSONB;
+ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS workout_type TEXT DEFAULT 'cardio';
+ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS exercises JSONB;
 
 -- 3. Create Daily Stats Table for steps and water logging
 CREATE TABLE IF NOT EXISTS public.daily_stats (
