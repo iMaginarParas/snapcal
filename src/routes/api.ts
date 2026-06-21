@@ -70,6 +70,7 @@ const logWorkoutSchema = z.object({
   exercises: z.array(z.object({
     name: z.string(),
     weight: z.number(),
+    reps: z.number().int().optional(),
   })).optional(),
 });
 
