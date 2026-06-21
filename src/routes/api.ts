@@ -1425,4 +1425,557 @@ router.get('/insights', requireAuth, async (req: any, res: any) => {
   }
 });
 
+// --- Fasting Logs API ---
+
+router.get('/fasting/active', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const active = fallbackDb.getActiveFast(userId);
+      return sendSuccess(res, active || null);
+    }
+
+    const { data, error } = await supabase
+      .from('fasting_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('completed', false)
+      .maybeSingle();
+
+    if (error) throw error;
+    sendSuccess(res, data || null);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve active fast', 500);
+  }
+});
+
+router.post('/fasting/start', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { protocol } = req.body;
+    if (!protocol) {
+      return sendError(res, 'Protocol is required (e.g. 16:8)', 400);
+    }
+
+    if (!isSupabaseLive) {
+      const fast = fallbackDb.startFast(userId, protocol);
+      return sendSuccess(res, fast);
+    }
+
+    // Check if there is already an active fast
+    const { data: active } = await supabase
+      .from('fasting_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('completed', false)
+      .maybeSingle();
+
+    if (active) {
+      return sendSuccess(res, active);
+    }
+
+    const { data, error } = await supabase
+      .from('fasting_logs')
+      .insert([{ user_id: userId, protocol, start_time: new Date().toISOString(), completed: false }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    sendSuccess(res, data);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to start fast', 500);
+  }
+});
+
+router.post('/fasting/stop', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.body;
+    if (!id) {
+      return sendError(res, 'Fasting log ID is required', 400);
+    }
+
+    if (!isSupabaseLive) {
+      const fast = fallbackDb.stopFast(userId, id);
+      return sendSuccess(res, fast);
+    }
+
+    const { data, error } = await supabase
+      .from('fasting_logs')
+      .update({ completed: true, end_time: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    sendSuccess(res, data);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to stop fast', 500);
+  }
+});
+
+router.get('/fasting/history', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const history = fallbackDb.getFastingHistory(userId);
+      return sendSuccess(res, history);
+    }
+
+    const { data, error } = await supabase
+      .from('fasting_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('completed', true)
+      .order('end_time', { ascending: false });
+
+    if (error) throw error;
+    sendSuccess(res, data || []);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve fasting history', 500);
+  }
+});
+
+// --- Weekly Leaderboard API ---
+
+router.get('/leaderboard', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const dbInstance = require('../services/db_fallback').initFallbackDb; // ensure loaded
+      const fallbackList = Object.keys(fallbackDb.getUser('system') ? fallbackDb.getFriends(userId) : {}).concat([userId]);
+      
+      const usersData = [];
+      const distinctUserIds = Array.from(new Set(fallbackList.concat(['f_sarah', 'f_alex', 'f_john', 'f_emma'])));
+      
+      for (const uid of distinctUserIds) {
+        const u = fallbackDb.getUser(uid);
+        const points = fallbackDb.getWeeklyPoints(uid);
+        usersData.push({
+          name: uid === userId ? 'You' : u.name || 'User',
+          points,
+          avatar: (u.name || 'US').split(' ').map((e: any) => e[0]).slice(0, 2).join('').toUpperCase(),
+          isMe: uid === userId
+        });
+      }
+      
+      usersData.sort((a, b) => b.points - a.points);
+      return sendSuccess(res, usersData);
+    }
+
+    // Supabase Live dynamic aggregation
+    const { data: users, error: uErr } = await supabase.from('users').select('*');
+    if (uErr) throw uErr;
+
+    const leaderboard = [];
+    for (const u of users) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: sData } = await supabase
+        .from('daily_stats')
+        .select('steps,water_ml')
+        .eq('user_id', u.id)
+        .eq('date', todayStr)
+        .maybeSingle();
+
+      const { data: wData } = await supabase
+        .from('workouts')
+        .select('id')
+        .eq('user_id', u.id);
+
+      const steps = sData?.steps || 0;
+      const water = sData?.water_ml || 0;
+      const workoutsCount = wData?.length || 0;
+      const points = Math.round(steps * 0.1 + water * 0.05 + workoutsCount * 100);
+
+      leaderboard.push({
+        name: u.id === userId ? 'You' : u.name || 'User',
+        points,
+        avatar: (u.name || 'US').split(' ').map((e: any) => e[0]).slice(0, 2).join('').toUpperCase(),
+        isMe: u.id === userId
+      });
+    }
+
+    leaderboard.sort((a, b) => b.points - a.points);
+    sendSuccess(res, leaderboard);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve leaderboard', 500);
+  }
+});
+
+// --- Groups & Communities API ---
+
+router.get('/groups', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const groups = fallbackDb.getGroups(userId);
+      return sendSuccess(res, groups);
+    }
+
+    const { data: groups, error } = await supabase
+      .from('groups')
+      .select('*, group_members(user_id)');
+
+    if (error) throw error;
+
+    const mapped = (groups || []).map(g => {
+      const members = (g.group_members || []).map((m: any) => m.user_id);
+      return {
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        is_public: g.is_public,
+        created_by: g.created_by,
+        memberCount: members.length,
+        isJoined: members.includes(userId),
+        avatars: members.slice(0, 3).map((mid: string) => mid === userId ? 'ME' : 'US'),
+        extraMemberText: members.length > 3 ? `+${members.length - 3}` : '',
+        tag: g.created_by === 'system' ? 'Trending' : 'New'
+      };
+    });
+
+    sendSuccess(res, mapped);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve groups', 500);
+  }
+});
+
+router.post('/groups', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { name, description, is_public } = req.body;
+    if (!name || !description) {
+      return sendError(res, 'Name and description are required', 400);
+    }
+
+    if (!isSupabaseLive) {
+      const group = fallbackDb.createGroup(userId, { name, description, is_public });
+      return sendSuccess(res, group);
+    }
+
+    const { data: newGroup, error: gErr } = await supabase
+      .from('groups')
+      .insert([{ name, description, is_public: is_public !== false, created_by: userId }])
+      .select()
+      .single();
+
+    if (gErr) throw gErr;
+
+    // Auto join group
+    await supabase.from('group_members').insert([{ group_id: newGroup.id, user_id: userId }]);
+
+    sendSuccess(res, {
+      ...newGroup,
+      memberCount: 1,
+      isJoined: true,
+      avatars: ['ME'],
+      extraMemberText: '',
+      tag: 'New'
+    });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to create group', 500);
+  }
+});
+
+router.post('/groups/:id/join', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const groupId = req.params.id;
+
+    if (!isSupabaseLive) {
+      const group = fallbackDb.joinGroup(userId, groupId);
+      return sendSuccess(res, group);
+    }
+
+    const { data, error } = await supabase
+      .from('group_members')
+      .insert([{ group_id: groupId, user_id: userId }])
+      .select()
+      .single();
+
+    if (error && !error.message.includes('duplicate key')) throw error;
+    sendSuccess(res, { success: true });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to join group', 500);
+  }
+});
+
+router.post('/groups/:id/leave', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const groupId = req.params.id;
+
+    if (!isSupabaseLive) {
+      const group = fallbackDb.leaveGroup(userId, groupId);
+      return sendSuccess(res, group);
+    }
+
+    const { error } = await supabase
+      .from('group_members')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    sendSuccess(res, { success: true });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to leave group', 500);
+  }
+});
+
+// --- Group Messages API ---
+
+router.get('/groups/:id/messages', requireAuth, async (req: any, res: any) => {
+  try {
+    const groupId = req.params.id;
+    if (!isSupabaseLive) {
+      const messages = fallbackDb.getGroupMessages(groupId);
+      return sendSuccess(res, messages);
+    }
+
+    const { data, error } = await supabase
+      .from('group_messages')
+      .select('*, users(name)')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    const mapped = (data || []).map(m => ({
+      id: m.id,
+      group_id: m.group_id,
+      user_id: m.user_id,
+      message: m.message,
+      created_at: m.created_at,
+      sender_name: m.users?.name || 'Guest User'
+    }));
+
+    sendSuccess(res, mapped);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve messages', 500);
+  }
+});
+
+router.post('/groups/:id/messages', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const groupId = req.params.id;
+    const { message } = req.body;
+
+    if (!message) {
+      return sendError(res, 'Message body is required', 400);
+    }
+
+    if (!isSupabaseLive) {
+      const newMessage = fallbackDb.sendGroupMessage(userId, groupId, message);
+      return sendSuccess(res, newMessage);
+    }
+
+    const { data, error } = await supabase
+      .from('group_messages')
+      .insert([{ group_id: groupId, user_id: userId, message }])
+      .select('*, users(name)')
+      .single();
+
+    if (error) throw error;
+    sendSuccess(res, {
+      id: data.id,
+      group_id: data.group_id,
+      user_id: data.user_id,
+      message: data.message,
+      created_at: data.created_at,
+      sender_name: data.users?.name || 'Guest User'
+    });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to send message', 500);
+  }
+});
+
+// --- Friends API ---
+
+router.get('/friends', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const friends = fallbackDb.getFriends(userId);
+      return sendSuccess(res, friends);
+    }
+
+    const { data, error } = await supabase
+      .from('friendships')
+      .select('*, users!friendships_friend_id_fkey(name, email)')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    const mapped = [];
+    for (const f of (data || [])) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: sData } = await supabase
+        .from('daily_stats')
+        .select('steps')
+        .eq('user_id', f.friend_id)
+        .eq('date', todayStr)
+        .maybeSingle();
+
+      const steps = sData?.steps || 0;
+      const friendUser = (f as any).users;
+      mapped.push({
+        id: f.id,
+        friend_id: f.friend_id,
+        name: friendUser?.name || 'Friend User',
+        email: friendUser?.email || '',
+        steps,
+        calories: Math.round(steps * 0.045),
+        avatar: (friendUser?.name || 'FR').split(' ').map((e: any) => e[0]).slice(0, 2).join('').toUpperCase(),
+        status: 'Active'
+      });
+    }
+
+    sendSuccess(res, mapped);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve friends list', 500);
+  }
+});
+
+router.post('/friends/add', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { email } = req.body;
+    if (!email) {
+      return sendError(res, 'Email address is required', 400);
+    }
+
+    if (!isSupabaseLive) {
+      const friendship = fallbackDb.addFriendByEmail(userId, email);
+      if (!friendship) return sendError(res, 'Already friends or error adding', 400);
+      return sendSuccess(res, friendship);
+    }
+
+    const { data: friendUser, error: fErr } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (fErr || !friendUser) {
+      return sendError(res, 'User not found with this email address', 404);
+    }
+
+    // Insert friendship records in both directions
+    await supabase.from('friendships').insert([
+      { user_id: userId, friend_id: friendUser.id, status: 'accepted' },
+      { user_id: friendUser.id, friend_id: userId, status: 'accepted' }
+    ]);
+
+    sendSuccess(res, { success: true });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to add friend', 500);
+  }
+});
+
+// --- Challenges API ---
+
+router.get('/challenges', requireAuth, async (req: any, res: any) => {
+  try {
+    if (!isSupabaseLive) {
+      const challenges = fallbackDb.getChallenges();
+      return sendSuccess(res, challenges);
+    }
+
+    const { data, error } = await supabase.from('challenges').select('*');
+    if (error) throw error;
+    sendSuccess(res, data || []);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve challenges', 500);
+  }
+});
+
+router.get('/challenges/user', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    if (!isSupabaseLive) {
+      const enrollments = fallbackDb.getUserChallenges(userId);
+      return sendSuccess(res, enrollments);
+    }
+
+    const { data, error } = await supabase
+      .from('user_challenges')
+      .select('*, challenges(*)')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    sendSuccess(res, data || []);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to retrieve enrolled challenges', 500);
+  }
+});
+
+router.post('/challenges/:id/join', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const challengeId = req.params.id;
+
+    if (!isSupabaseLive) {
+      const uc = fallbackDb.joinChallenge(userId, challengeId);
+      return sendSuccess(res, uc);
+    }
+
+    const { data, error } = await supabase
+      .from('user_challenges')
+      .insert([{ user_id: userId, challenge_id: challengeId, completed_workouts: 2, completed: false }])
+      .select()
+      .single();
+
+    if (error && !error.message.includes('duplicate key')) throw error;
+    sendSuccess(res, { success: true });
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to join challenge', 500);
+  }
+});
+
+router.post('/challenges/:id/progress', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const challengeId = req.params.id;
+
+    if (!isSupabaseLive) {
+      const uc = fallbackDb.updateChallengeProgress(userId, challengeId);
+      return sendSuccess(res, uc);
+    }
+
+    const { data: uc, error: fErr } = await supabase
+      .from('user_challenges')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('challenge_id', challengeId)
+      .single();
+
+    if (fErr || !uc) throw new Error('Enrollment not found');
+
+    const { data: ch } = await supabase
+      .from('challenges')
+      .select('*')
+      .eq('id', challengeId)
+      .single();
+
+    const target = ch ? ch.target_workouts : 5;
+    const completedCount = Math.min(target, uc.completed_workouts + 1);
+    const completed = completedCount >= target;
+
+    const { data: updated, error } = await supabase
+      .from('user_challenges')
+      .update({ completed_workouts: completedCount, completed })
+      .eq('id', uc.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    sendSuccess(res, updated);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to update challenge progress', 500);
+  }
+});
+
 export default router;

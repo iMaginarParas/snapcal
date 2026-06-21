@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. Users Table
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id),
     email TEXT UNIQUE NOT NULL,
     name TEXT,
@@ -18,7 +18,9 @@ CREATE TABLE public.users (
 
 -- Set up Row Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
 CREATE POLICY "Users can view own profile" ON public.users FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
 
 -- Trigger to automatically create a user profile when they sign up
@@ -31,12 +33,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- 2. Plans Table
-CREATE TABLE public.plans (
+CREATE TABLE IF NOT EXISTS public.plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     file_url TEXT,
@@ -45,10 +48,11 @@ CREATE TABLE public.plans (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own plans" ON public.plans;
 CREATE POLICY "Users can manage own plans" ON public.plans FOR ALL USING (auth.uid() = user_id);
 
 -- 3. Daily Tasks Table
-CREATE TABLE public.daily_tasks (
+CREATE TABLE IF NOT EXISTS public.daily_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     task_type TEXT NOT NULL, -- 'meal', 'workout', 'water'
@@ -59,10 +63,11 @@ CREATE TABLE public.daily_tasks (
     date DATE NOT NULL DEFAULT CURRENT_DATE
 );
 ALTER TABLE public.daily_tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own tasks" ON public.daily_tasks;
 CREATE POLICY "Users can manage own tasks" ON public.daily_tasks FOR ALL USING (auth.uid() = user_id);
 
 -- 4. Meals Table
-CREATE TABLE public.meals (
+CREATE TABLE IF NOT EXISTS public.meals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -74,10 +79,11 @@ CREATE TABLE public.meals (
     logged_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own meals" ON public.meals;
 CREATE POLICY "Users can manage own meals" ON public.meals FOR ALL USING (auth.uid() = user_id);
 
 -- 5. Workouts Table
-CREATE TABLE public.workouts (
+CREATE TABLE IF NOT EXISTS public.workouts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     workout_name TEXT NOT NULL,
@@ -85,10 +91,11 @@ CREATE TABLE public.workouts (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 ALTER TABLE public.workouts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own workouts" ON public.workouts;
 CREATE POLICY "Users can manage own workouts" ON public.workouts FOR ALL USING (auth.uid() = user_id);
 
 -- 6. Workout Exercises Table
-CREATE TABLE public.workout_exercises (
+CREATE TABLE IF NOT EXISTS public.workout_exercises (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
     exercise_name TEXT NOT NULL,
@@ -97,7 +104,7 @@ CREATE TABLE public.workout_exercises (
     completed BOOLEAN DEFAULT FALSE
 );
 ALTER TABLE public.workout_exercises ENABLE ROW LEVEL SECURITY;
--- For simplicity, users can manage all workout exercises (assuming backend ensures they belong to their workout)
+DROP POLICY IF EXISTS "Users can manage exercises" ON public.workout_exercises;
 CREATE POLICY "Users can manage exercises" ON public.workout_exercises FOR ALL USING (true);
 
 
@@ -125,6 +132,7 @@ CREATE TABLE IF NOT EXISTS public.daily_stats (
     UNIQUE(user_id, date)
 );
 ALTER TABLE public.daily_stats ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own daily stats" ON public.daily_stats;
 CREATE POLICY "Users can manage own daily stats" ON public.daily_stats FOR ALL USING (auth.uid() = user_id);
 
 -- 4. Create Measurement Logs Table for body weight and measurements tracking
@@ -137,4 +145,110 @@ CREATE TABLE IF NOT EXISTS public.measurement_logs (
     date TEXT NOT NULL
 );
 ALTER TABLE public.measurement_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own measurements" ON public.measurement_logs;
 CREATE POLICY "Users can manage own measurements" ON public.measurement_logs FOR ALL USING (auth.uid() = user_id);
+
+-- 5. Create Fasting Logs Table
+CREATE TABLE IF NOT EXISTS public.fasting_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    protocol TEXT NOT NULL,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE,
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.fasting_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own fasting logs" ON public.fasting_logs;
+CREATE POLICY "Users can manage own fasting logs" ON public.fasting_logs FOR ALL USING (auth.uid() = user_id);
+
+-- 6. Create Groups Table
+CREATE TABLE IF NOT EXISTS public.groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    is_public BOOLEAN DEFAULT TRUE,
+    created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 7. Create Group Members Table
+CREATE TABLE IF NOT EXISTS public.group_members (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    UNIQUE(group_id, user_id)
+);
+
+-- RLS for Groups (Moved here to resolve circular dependency: groups policies query group_members, but group_members references groups)
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view public groups" ON public.groups;
+CREATE POLICY "Users can view public groups" ON public.groups FOR SELECT USING (is_public = TRUE OR auth.uid() IN (SELECT user_id FROM public.group_members WHERE group_id = id));
+DROP POLICY IF EXISTS "Users can manage own created groups" ON public.groups;
+CREATE POLICY "Users can manage own created groups" ON public.groups FOR ALL USING (auth.uid() = created_by);
+
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view group members" ON public.group_members;
+CREATE POLICY "Anyone can view group members" ON public.group_members FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can join/leave groups" ON public.group_members;
+CREATE POLICY "Users can join/leave groups" ON public.group_members FOR ALL USING (auth.uid() = user_id);
+
+-- 8. Create Group Messages Table
+CREATE TABLE IF NOT EXISTS public.group_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.group_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Members can view messages" ON public.group_messages;
+CREATE POLICY "Members can view messages" ON public.group_messages FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert own messages" ON public.group_messages;
+CREATE POLICY "Users can insert own messages" ON public.group_messages FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 9. Create Friendships Table
+CREATE TABLE IF NOT EXISTS public.friendships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    friend_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'accepted',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    UNIQUE(user_id, friend_id)
+);
+ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own friendships" ON public.friendships;
+CREATE POLICY "Users can manage own friendships" ON public.friendships FOR ALL USING (auth.uid() = user_id OR auth.uid() = friend_id);
+
+-- 10. Create Challenges Table
+CREATE TABLE IF NOT EXISTS public.challenges (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    description TEXT,
+    target_workouts INT DEFAULT 5,
+    points INT DEFAULT 500,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view challenges" ON public.challenges;
+CREATE POLICY "Anyone can view challenges" ON public.challenges FOR SELECT USING (true);
+
+-- 11. Create User Challenges Table
+CREATE TABLE IF NOT EXISTS public.user_challenges (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    challenge_id UUID REFERENCES public.challenges(id) ON DELETE CASCADE,
+    completed_workouts INT DEFAULT 2,
+    completed BOOLEAN DEFAULT FALSE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    UNIQUE(user_id, challenge_id)
+);
+ALTER TABLE public.user_challenges ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own enrollments" ON public.user_challenges;
+CREATE POLICY "Users can manage own enrollments" ON public.user_challenges FOR ALL USING (auth.uid() = user_id);
+
+-- Seed initial challenges
+INSERT INTO public.challenges (title, description, target_workouts, points)
+VALUES ('7-Day Core Crusher', 'Complete 5 core workouts this week to earn the exclusive Golden Abs badge.', 5, 500)
+ON CONFLICT DO NOTHING;
