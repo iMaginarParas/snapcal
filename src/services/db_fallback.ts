@@ -108,6 +108,9 @@ export const fallbackDb = {
     saveDb();
     return db.users[id];
   },
+  getAllUsers: () => {
+    return Object.values(db.users);
+  },
   getMeals: (userId: string) => {
     return db.meals[userId] || [];
   },

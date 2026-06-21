@@ -1859,6 +1859,47 @@ router.get('/friends', requireAuth, async (req: any, res: any) => {
   }
 });
 
+router.get('/users/search', requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const q = (req.query.q || '').toString().trim();
+    if (!q) {
+      return sendSuccess(res, []);
+    }
+
+    if (!isSupabaseLive) {
+      const allUsers = (fallbackDb as any).getAllUsers();
+      const filtered = allUsers
+        .filter((u: any) => u.id !== userId && (
+          (u.username && u.username.toLowerCase().includes(q.toLowerCase())) ||
+          (u.email && u.email.toLowerCase().includes(q.toLowerCase())) ||
+          (u.name && u.name.toLowerCase().includes(q.toLowerCase()))
+        ))
+        .slice(0, 10)
+        .map((u: any) => ({
+          id: u.id,
+          name: u.name || 'User',
+          username: u.username || '',
+          email: u.email || '',
+          profile_picture_url: u.profile_picture_url || null
+        }));
+      return sendSuccess(res, filtered);
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, username, email, profile_picture_url')
+      .or(`username.ilike.%${q}%,email.ilike.%${q}%,name.ilike.%${q}%`)
+      .neq('id', userId)
+      .limit(10);
+
+    if (error) throw error;
+    sendSuccess(res, data || []);
+  } catch (err: any) {
+    sendError(res, err.message || 'Failed to search users', 500);
+  }
+});
+
 router.post('/friends/add', requireAuth, async (req: any, res: any) => {
   try {
     const userId = req.user.id;
