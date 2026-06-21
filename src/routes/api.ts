@@ -1845,23 +1845,58 @@ router.post('/friends/add', requireAuth, async (req: any, res: any) => {
     const userId = req.user.id;
     const { email } = req.body;
     if (!email) {
-      return sendError(res, 'Email address is required', 400);
+      return sendError(res, 'Username or email address is required', 400);
     }
 
+    const searchVal = email.trim();
+
     if (!isSupabaseLive) {
-      const friendship = fallbackDb.addFriendByEmail(userId, email);
+      const friendship = fallbackDb.addFriendByEmail(userId, searchVal);
       if (!friendship) return sendError(res, 'Already friends or error adding', 400);
       return sendSuccess(res, friendship);
     }
 
-    const { data: friendUser, error: fErr } = await supabase
+    let friendUser = null;
+
+    // 1. Try to find by email
+    const { data: byEmail } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .eq('email', searchVal)
       .maybeSingle();
 
-    if (fErr || !friendUser) {
-      return sendError(res, 'User not found with this email address', 404);
+    if (byEmail) {
+      friendUser = byEmail;
+    } else {
+      // 2. Try to find by display name / username
+      const { data: byName } = await supabase
+        .from('users')
+        .select('*')
+        .ilike('name', searchVal)
+        .limit(1);
+      if (byName && byName.length > 0) {
+        friendUser = byName[0];
+      }
+    }
+
+    if (!friendUser) {
+      return sendError(res, 'User not found with this username or email address', 404);
+    }
+
+    if (friendUser.id === userId) {
+      return sendError(res, 'You cannot add yourself as a friend', 400);
+    }
+
+    // Check if already friends
+    const { data: existingFriendship } = await supabase
+      .from('friendships')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('friend_id', friendUser.id)
+      .maybeSingle();
+
+    if (existingFriendship) {
+      return sendError(res, 'You are already friends with this user', 400);
     }
 
     // Insert friendship records in both directions

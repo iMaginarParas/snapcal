@@ -381,10 +381,18 @@ export const fallbackDb = {
     });
   },
   addFriendByEmail: (userId: string, email: string) => {
-    const friendId = Object.keys(db.users).find(uid => db.users[uid].email.toLowerCase() === email.toLowerCase());
+    const searchVal = email.trim();
+    const friendId = Object.keys(db.users).find(uid => 
+      db.users[uid].email.toLowerCase() === searchVal.toLowerCase() ||
+      db.users[uid].name.toLowerCase() === searchVal.toLowerCase()
+    );
     if (!friendId) {
-      const mockId = email.replace(/[^a-zA-Z0-9]/g, '_');
-      db.users[mockId] = { id: mockId, email, name: email.split('@')[0].toUpperCase(), age: 25, weight: 70, height: 170, goals: 'Stay Healthy', profile_picture_url: null };
+      const mockId = searchVal.replace(/[^a-zA-Z0-9]/g, '_');
+      const isEmail = searchVal.includes('@');
+      const mockEmail = isEmail ? searchVal : `${searchVal.toLowerCase()}@sabtrack.com`;
+      const mockName = isEmail ? searchVal.split('@')[0].toUpperCase() : searchVal.toUpperCase();
+
+      db.users[mockId] = { id: mockId, email: mockEmail, name: mockName, age: 25, weight: 70, height: 170, goals: 'Stay Healthy', profile_picture_url: null };
       saveDb();
       return fallbackDb.createFriendship(userId, mockId);
     }
