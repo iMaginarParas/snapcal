@@ -26,9 +26,30 @@ CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (a
 -- Trigger to automatically create a user profile when they sign up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  base_username TEXT;
+  final_username TEXT;
+  counter INT := 0;
 BEGIN
-  INSERT INTO public.users (id, email)
-  VALUES (new.id, new.email);
+  -- Extract prefix from email
+  base_username := split_part(new.email, '@', 1);
+  -- Sanitize base_username to be alphanumeric/underscores only
+  base_username := regexp_replace(base_username, '[^a-zA-Z0-9_]', '', 'g');
+  -- Fallback if empty
+  IF base_username = '' THEN
+    base_username := 'user';
+  END IF;
+
+  final_username := base_username;
+
+  -- Ensure username is unique by appending counter if necessary
+  WHILE EXISTS (SELECT 1 FROM public.users WHERE username = final_username) LOOP
+    counter := counter + 1;
+    final_username := base_username || counter::TEXT;
+  END LOOP;
+
+  INSERT INTO public.users (id, email, username)
+  VALUES (new.id, new.email, final_username);
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -110,8 +131,9 @@ CREATE POLICY "Users can manage exercises" ON public.workout_exercises FOR ALL U
 
 -- --- SABTRACK AI UPDATES (FitFlow AI) ---
 
--- 1. Alter users table to add profile_picture_url column
+-- 1. Alter users table to add profile_picture_url and unique username columns
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
 
 -- 2. Alter workouts table to support live GPS workout details and strength workouts
 ALTER TABLE public.workouts ADD COLUMN IF NOT EXISTS distance NUMERIC;

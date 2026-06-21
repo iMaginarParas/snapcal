@@ -44,6 +44,7 @@ const describeNutritionSchema = z.object({
 
 const updateProfileSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
+  username: z.string().min(3, 'Username must be at least 3 characters long').regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').optional(),
   age: z.union([z.number(), z.string()]).transform(val => parseInt(val as string) || 25).optional(),
   weight: z.union([z.number(), z.string()]).transform(val => parseFloat(val as string) || 76.4).optional(),
   height: z.union([z.number(), z.string()]).transform(val => parseFloat(val as string) || 178.0).optional(),
@@ -663,16 +664,34 @@ router.get('/user/profile', requireAuth, async (req: any, res: any) => {
 router.put('/user/profile', requireAuth, validate(updateProfileSchema), async (req: any, res: any) => {
   try {
     const userId = req.user.id;
-    const { name, age, weight, height, goals } = req.body;
+    const { name, username, age, weight, height, goals } = req.body;
 
     if (!isSupabaseLive) {
-      const updated = fallbackDb.updateUser(userId, { name, age, weight, height, goals });
-      return sendSuccess(res, updated);
+      try {
+        const updated = fallbackDb.updateUser(userId, { name, username, age, weight, height, goals });
+        return sendSuccess(res, updated);
+      } catch (err: any) {
+        return sendError(res, err.message, 400);
+      }
+    }
+
+    if (username) {
+      // Check if username is already taken by another user in Supabase
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .neq('id', userId)
+        .maybeSingle();
+
+      if (existingUser) {
+        return sendError(res, 'Username is already taken', 400);
+      }
     }
 
     const { data, error } = await supabase
       .from('users')
-      .update({ name, age, weight, height, goals })
+      .update({ name, username, age, weight, height, goals })
       .eq('id', userId)
       .select()
       .single();
@@ -1868,14 +1887,25 @@ router.post('/friends/add', requireAuth, async (req: any, res: any) => {
     if (byEmail) {
       friendUser = byEmail;
     } else {
-      // 2. Try to find by display name / username
-      const { data: byName } = await supabase
+      // 2. Try to find by username
+      const { data: byUsername } = await supabase
         .from('users')
         .select('*')
-        .ilike('name', searchVal)
-        .limit(1);
-      if (byName && byName.length > 0) {
-        friendUser = byName[0];
+        .eq('username', searchVal)
+        .maybeSingle();
+
+      if (byUsername) {
+        friendUser = byUsername;
+      } else {
+        // 3. Try to find by display name
+        const { data: byName } = await supabase
+          .from('users')
+          .select('*')
+          .ilike('name', searchVal)
+          .limit(1);
+        if (byName && byName.length > 0) {
+          friendUser = byName[0];
+        }
       }
     }
 

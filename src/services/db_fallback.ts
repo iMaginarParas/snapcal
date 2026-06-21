@@ -86,13 +86,24 @@ function saveDb() {
 export const fallbackDb = {
   getUser: (id: string) => {
     if (!db.users[id]) {
-      db.users[id] = { id, email: `${id}@fallback.local`, name: 'Guest User', age: 25, weight: 76.4, height: 178, goals: 'Build Muscle', profile_picture_url: null };
+      const defaultUsername = id.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_');
+      db.users[id] = { id, email: `${id}@fallback.local`, username: defaultUsername, name: 'Guest User', age: 25, weight: 76.4, height: 178, goals: 'Build Muscle', profile_picture_url: null };
       saveDb();
     }
     return db.users[id];
   },
   updateUser: (id: string, updates: any) => {
     const user = fallbackDb.getUser(id);
+
+    if (updates.username && updates.username !== user.username) {
+      const usernameExists = Object.keys(db.users).some(uid => 
+        uid !== id && db.users[uid].username?.toLowerCase() === updates.username.toLowerCase()
+      );
+      if (usernameExists) {
+        throw new Error('Username is already taken');
+      }
+    }
+
     db.users[id] = { ...user, ...updates };
     saveDb();
     return db.users[id];
