@@ -360,12 +360,11 @@ router.post('/auth/google-login', authLimiter, validate(googleLoginSchema), asyn
 
       const { error: upsertError } = await supabase
         .from('users')
-        .upsert({
-          id: data.user.id,
-          email: data.user.email,
+        .update({
           name: googleName,
           profile_picture_url: googleAvatar,
-        }, { onConflict: 'id' });
+        })
+        .eq('id', data.user.id);
 
       if (upsertError) {
         logger.warn(`Failed to upsert user profile on Google Sign-In: ${upsertError.message}`);
