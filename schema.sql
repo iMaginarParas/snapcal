@@ -274,3 +274,49 @@ CREATE POLICY "Users can manage own enrollments" ON public.user_challenges FOR A
 INSERT INTO public.challenges (title, description, target_workouts, points)
 VALUES ('7-Day Core Crusher', 'Complete 5 core workouts this week to earn the exclusive Golden Abs badge.', 5, 500)
 ON CONFLICT DO NOTHING;
+
+-- Alter meals table to support optional text description / user note
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- 12. Profiles Table
+CREATE TABLE IF NOT EXISTS public.profiles (
+    user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+    age INT,
+    gender TEXT,
+    height_cm NUMERIC,
+    current_weight NUMERIC,
+    target_weight NUMERIC,
+    activity_level TEXT,
+    goal TEXT,
+    bmi NUMERIC,
+    bmi_category TEXT,
+    bmr NUMERIC,
+    tdee NUMERIC,
+    target_calories INT,
+    protein_target INT,
+    carb_target INT,
+    fat_target INT,
+    fiber_target INT,
+    water_target INT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own profile details" ON public.profiles;
+CREATE POLICY "Users can manage own profile details" ON public.profiles FOR ALL USING (auth.uid() = user_id);
+
+-- 13. Weight History Table
+CREATE TABLE IF NOT EXISTS public.weight_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    weight NUMERIC NOT NULL,
+    bmi NUMERIC NOT NULL,
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.weight_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own weight history" ON public.weight_history;
+CREATE POLICY "Users can manage own weight history" ON public.weight_history FOR ALL USING (auth.uid() = user_id);
+
+
