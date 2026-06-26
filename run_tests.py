@@ -1,6 +1,7 @@
 import sys
 import json
 import io
+import uuid
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -191,7 +192,7 @@ def run_tests():
     # 20. User Profile API: Update Profile and check calculations
     profile_payload = {
         "name": "Test User",
-        "username": "testuser",
+        "username": f"testuser_{uuid.uuid4().hex[:8]}",
         "age": 28,
         "gender": "Male",
         "height": 180.0,
@@ -222,6 +223,69 @@ def run_tests():
         else:
             print(f"[FAIL] User Profile History retrieval failed: {data}")
             failed += 1
+
+    # 22. Workouts API: Log Workout
+    workout_payload = {
+        "workout_name": "Push Day",
+        "date": "2026-06-26",
+        "duration_seconds": 3600,
+        "calories": 350,
+        "workout_type": "strength",
+        "category": "chest",
+        "exercises": [
+            {
+                "name": "Bench Press",
+                "sets": 3,
+                "reps": 10,
+                "weight": 60.0
+            }
+        ]
+    }
+    res = client.post("/api/workouts", json=workout_payload, headers=headers)
+    is_workout_ok = assert_status(res, 200, "POST /workouts")
+    
+    # 23. Workouts API: Get Workouts
+    res = client.get("/api/workouts", headers=headers)
+    assert_status(res, 200, "GET /workouts")
+
+    # 24. Fasting API: Start Fast
+    fast_payload = {
+        "protocol": "16-8"
+    }
+    res = client.post("/api/fasting/start", json=fast_payload, headers=headers)
+    is_fast_ok = assert_status(res, 200, "POST /fasting/start")
+    
+    fast_id = ""
+    if is_fast_ok:
+        fast_id = res.json().get("data", {}).get("id", "")
+    
+    # 25. Fasting API: Get Active Fast
+    res = client.get("/api/fasting/active", headers=headers)
+    assert_status(res, 200, "GET /fasting/active")
+
+    # 26. Fasting API: Stop Fast
+    if is_fast_ok and fast_id:
+        stop_payload = {
+            "id": fast_id
+        }
+        res = client.post("/api/fasting/stop", json=stop_payload, headers=headers)
+        assert_status(res, 200, "POST /fasting/stop")
+
+    # 27. Groups & Challenges API: Get Groups
+    res = client.get("/api/groups", headers=headers)
+    assert_status(res, 200, "GET /groups")
+
+    # 28. Groups & Challenges API: Get Challenges
+    res = client.get("/api/challenges", headers=headers)
+    assert_status(res, 200, "GET /challenges")
+
+    # 29. Insights & Reports API: Get Insights
+    res = client.get("/api/insights", headers=headers)
+    assert_status(res, 200, "GET /insights")
+
+    # 30. Insights & Reports API: Get Daily Report
+    res = client.get("/api/insights/daily?date=2026-06-26", headers=headers)
+    assert_status(res, 200, "GET /insights/daily")
 
     print("\n--- Test Results Summary ---")
     print(f"Total: {passed + failed}")

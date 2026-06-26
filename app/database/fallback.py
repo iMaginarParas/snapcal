@@ -512,6 +512,9 @@ class DbFallback:
         return points
 
     # --- Challenges ---
+    def get_challenges(self):
+        return self.db.get("challenges", [])
+
     def get_user_challenges(self, user_id: str):
         logs = self.db["userChallenges"].get(user_id, [])
         result = []
