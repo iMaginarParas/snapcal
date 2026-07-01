@@ -24,7 +24,7 @@ class StepsRepository:
             return [s for s in user_steps if start_date_str <= s["date"] <= end_date_str]
 
         res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).gte("date", start_date_str).lte("date", end_date_str).order("date", desc=False).execute()
-        return res.data or []
+        return res.data if res else []
 
     def sync_steps(self, user_id: str, sync_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -63,7 +63,7 @@ class StepsRepository:
                 return {**existing, **update_data}
                 
             res = supabase_client.from_("daily_steps").update(update_data).eq("id", existing["id"]).execute()
-            return res.data[0]
+            return res.data[0] if res and res.data else {}
         else:
             # Insert new record
             insert_data = {
@@ -91,6 +91,6 @@ class StepsRepository:
                 return insert_data
                 
             res = supabase_client.from_("daily_steps").insert(insert_data).execute()
-            return res.data[0]
+            return res.data[0] if res and res.data else {}
 
 steps_repository = StepsRepository()

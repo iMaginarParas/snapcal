@@ -25,7 +25,7 @@ class MealRepository:
             return res
 
         res = supabase_client.from_("meals").insert(db_payload).execute()
-        return res.data[0]
+        return res.data[0] if res and res.data else {}
 
     def create_food_items(self, meal_id: str, food_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         db_items = []
@@ -60,7 +60,7 @@ class MealRepository:
             return db_items
 
         res = supabase_client.from_("food_items").insert(db_items).execute()
-        return res.data or []
+        return res.data if res else []
 
     def get_meals_by_date(self, user_id: str, date_str: str) -> List[Dict[str, Any]]:
         if not is_supabase_live():
@@ -68,7 +68,7 @@ class MealRepository:
             return [m for m in meals if m.get("logged_at", "").split("T")[0] == date_str]
 
         res = supabase_client.from_("meals").select("*, food_items(*)").eq("user_id", user_id).gte("logged_at", f"{date_str}T00:00:00.000Z").lte("logged_at", f"{date_str}T23:59:59.999Z").execute()
-        return res.data or []
+        return res.data if res else []
 
     def get_meal_history(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         if not is_supabase_live():
@@ -77,7 +77,7 @@ class MealRepository:
             return sorted_meals[offset : offset + limit]
 
         res = supabase_client.from_("meals").select("*, food_items(*)").eq("user_id", user_id).order("logged_at", desc=True).range(offset, offset + limit - 1).execute()
-        return res.data or []
+        return res.data if res else []
 
     def delete_meal(self, user_id: str, meal_id: str) -> bool:
         if not is_supabase_live():
@@ -89,7 +89,7 @@ class MealRepository:
             return False
 
         res = supabase_client.from_("meals").delete().eq("id", meal_id).eq("user_id", user_id).execute()
-        return bool(res.data)
+        return bool(res.data) if res else False
 
     # --- Meal Templates ---
     def create_template(self, user_id: str, template_name: str, foods: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -109,13 +109,13 @@ class MealRepository:
             return template_payload
 
         res = supabase_client.from_("meal_templates").insert(template_payload).execute()
-        return res.data[0]
+        return res.data[0] if res and res.data else {}
 
     def get_templates(self, user_id: str) -> List[Dict[str, Any]]:
         if not is_supabase_live():
             return fallback_db.db.get("mealTemplates", {}).get(user_id, [])
 
         res = supabase_client.from_("meal_templates").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-        return res.data or []
+        return res.data if res else []
 
 meal_repository = MealRepository()

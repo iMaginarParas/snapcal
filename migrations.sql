@@ -154,6 +154,46 @@ ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS carbs NUMERIC;
 ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS fat NUMERIC;
 ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS fiber NUMERIC DEFAULT 0.0;
 
+-- Create Food Items Table if not exists
+CREATE TABLE IF NOT EXISTS public.food_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    meal_id UUID REFERENCES public.meals(id) ON DELETE CASCADE,
+    food_name TEXT NOT NULL,
+    weight NUMERIC NOT NULL,
+    calories INT NOT NULL,
+    protein NUMERIC NOT NULL,
+    carbs NUMERIC NOT NULL,
+    fat NUMERIC NOT NULL,
+    fiber NUMERIC NOT NULL,
+    confidence NUMERIC NOT NULL,
+    cooking_method TEXT,
+    ingredients JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.food_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own food items" ON public.food_items;
+CREATE POLICY "Users can manage own food items" ON public.food_items FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM public.meals 
+        WHERE public.meals.id = public.food_items.meal_id 
+        AND public.meals.user_id = auth.uid()
+    )
+);
+
+-- Create User Corrections Table if not exists
+CREATE TABLE IF NOT EXISTS public.user_corrections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    original_name TEXT NOT NULL,
+    corrected_name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.user_corrections ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own corrections" ON public.user_corrections;
+CREATE POLICY "Users can manage own corrections" ON public.user_corrections FOR ALL USING (auth.uid() = user_id);
+
 -- 10. Update existing food_items table with newer columns
 ALTER TABLE public.food_items ADD COLUMN IF NOT EXISTS normalized_name TEXT;
 ALTER TABLE public.food_items ADD COLUMN IF NOT EXISTS weight NUMERIC;
@@ -224,4 +264,27 @@ CREATE TABLE IF NOT EXISTS public.weight_history (
 ALTER TABLE public.weight_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage own weight history" ON public.weight_history;
 CREATE POLICY "Users can manage own weight history" ON public.weight_history FOR ALL USING (auth.uid() = user_id);
+
+-- 11. Create Supplements Table
+CREATE TABLE IF NOT EXISTS public.supplements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    dosage TEXT,
+    time TIME NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.supplements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own supplements" ON public.supplements;
+CREATE POLICY "Users can manage own supplements" ON public.supplements FOR ALL USING (auth.uid() = user_id);
+
+-- Seed initial default public communities/groups
+INSERT INTO public.groups (id, name, description, is_public, created_by)
+VALUES 
+    ('00000000-0000-0000-0000-000000000001'::UUID, 'Fitness & Workouts', 'Share daily workouts that match your calorie goals, keep each other accountable.', TRUE, NULL),
+    ('00000000-0000-0000-0000-000000000002'::UUID, 'New to Calorie Tracking', 'Beginner questions, quick meal tips, tracking shortcuts, and celebrating first wins.', TRUE, NULL),
+    ('00000000-0000-0000-0000-000000000003'::UUID, 'Muscle Gain & Bulking', 'Strategies for eating in a clean surplus, protein recipes, and heavy weight lifting.', TRUE, NULL),
+    ('00000000-0000-0000-0000-000000000004'::UUID, 'Clean Fasting Habits', 'Share your intermittent fasting protocols, water fasting tips, and support.', TRUE, NULL)
+ON CONFLICT (id) DO NOTHING;
 

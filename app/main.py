@@ -16,6 +16,7 @@ from app.api.groups import router as groups_router
 from app.api.analytics import router as analytics_router
 from app.api.meals import router as meals_router
 from app.api.steps import router as steps_router
+from app.api.supplements import router as supplements_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -42,6 +43,7 @@ app.include_router(groups_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(meals_router, prefix=settings.API_V1_STR)
 app.include_router(steps_router, prefix=settings.API_V1_STR)
+app.include_router(supplements_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():

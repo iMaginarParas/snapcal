@@ -287,6 +287,28 @@ def run_tests():
     res = client.get("/api/insights/daily?date=2026-06-26", headers=headers)
     assert_status(res, 200, "GET /insights/daily")
 
+    # 31. Supplements API: Add Supplement
+    supp_payload = {
+        "name": "Vitamin C",
+        "dosage": "500mg",
+        "time": "08:00"
+    }
+    res = client.post("/api/supplements", json=supp_payload, headers=headers)
+    is_supp_ok = assert_status(res, 201, "POST /supplements")
+    
+    supp_id = ""
+    if is_supp_ok:
+        supp_id = res.json().get("id", "")
+        
+    # 32. Supplements API: Get Supplements
+    res = client.get("/api/supplements", headers=headers)
+    assert_status(res, 200, "GET /supplements")
+    
+    # 33. Supplements API: Delete Supplement
+    if is_supp_ok and supp_id:
+        res = client.delete(f"/api/supplements/{supp_id}", headers=headers)
+        assert_status(res, 200, "DELETE /supplements/{id}")
+
     print("\n--- Test Results Summary ---")
     print(f"Total: {passed + failed}")
     print(f"Passed: {passed}")

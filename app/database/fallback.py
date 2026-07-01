@@ -32,7 +32,8 @@ class DbFallback:
             "mealTemplates": {},
             "dailySteps": {},
             "profiles": {},
-            "weightHistory": {}
+            "weightHistory": {},
+            "supplements": {}
         }
         self.init_db()
 
@@ -281,15 +282,15 @@ class DbFallback:
     def get_groups(self, user_id: str):
         if not self.db.get("groups"):
             self.db["groups"] = [
-                { "id": "g_fitness_workouts", "name": "Fitness & Workouts", "description": "Share daily workouts that match your calorie goals, keep each other accountable.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
-                { "id": "g_new_calorie", "name": "New to Calorie Tracking", "description": "Beginner questions, quick meal tips, tracking shortcuts, and celebrating first wins.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
-                { "id": "g_muscle_gain", "name": "Muscle Gain & Bulking", "description": "Strategies for eating in a clean surplus, protein recipes, and heavy weight lifting.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
-                { "id": "g_clean_fasting", "name": "Clean Fasting Habits", "description": "Share your intermittent fasting protocols, water fasting tips, and support.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" }
+                { "id": "00000000-0000-0000-0000-000000000001", "name": "Fitness & Workouts", "description": "Share daily workouts that match your calorie goals, keep each other accountable.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
+                { "id": "00000000-0000-0000-0000-000000000002", "name": "New to Calorie Tracking", "description": "Beginner questions, quick meal tips, tracking shortcuts, and celebrating first wins.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
+                { "id": "00000000-0000-0000-0000-000000000003", "name": "Muscle Gain & Bulking", "description": "Strategies for eating in a clean surplus, protein recipes, and heavy weight lifting.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" },
+                { "id": "00000000-0000-0000-0000-000000000004", "name": "Clean Fasting Habits", "description": "Share your intermittent fasting protocols, water fasting tips, and support.", "is_public": True, "created_by": "system", "created_at": datetime.utcnow().isoformat() + "Z" }
             ]
-            self.db["groupMembers"]["g_fitness_workouts"] = ["system", "JD", "RS", "A"]
-            self.db["groupMembers"]["g_new_calorie"] = ["system", "M", "TL", "BK"]
-            self.db["groupMembers"]["g_muscle_gain"] = ["system", "P", "SO", "D"]
-            self.db["groupMembers"]["g_clean_fasting"] = ["system", "E", "W", "CH"]
+            self.db["groupMembers"]["00000000-0000-0000-0000-000000000001"] = ["system", "JD", "RS", "A"]
+            self.db["groupMembers"]["00000000-0000-0000-0000-000000000002"] = ["system", "M", "TL", "BK"]
+            self.db["groupMembers"]["00000000-0000-0000-0000-000000000003"] = ["system", "P", "SO", "D"]
+            self.db["groupMembers"]["00000000-0000-0000-0000-000000000004"] = ["system", "E", "W", "CH"]
             self.save_db()
 
         result = []
@@ -608,6 +609,40 @@ class DbFallback:
 
     def get_weight_history(self, user_id: str):
         return self.db["weightHistory"].get(user_id, [])
+
+    # --- Supplements ---
+    def get_supplements(self, user_id: str):
+        if "supplements" not in self.db:
+            self.db["supplements"] = {}
+        return self.db["supplements"].get(user_id, [])
+
+    def add_supplement(self, user_id: str, supplement: dict):
+        if "supplements" not in self.db:
+            self.db["supplements"] = {}
+        if user_id not in self.db["supplements"]:
+            self.db["supplements"][user_id] = []
+        
+        new_supp = {
+            "id": supplement.get("id") or self.generate_id(),
+            "user_id": user_id,
+            "name": supplement["name"],
+            "dosage": supplement.get("dosage"),
+            "time": supplement["time"],
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        self.db["supplements"][user_id].append(new_supp)
+        self.save_db()
+        return new_supp
+
+    def delete_supplement(self, user_id: str, supplement_id: str):
+        if "supplements" not in self.db or user_id not in self.db["supplements"]:
+            return False
+        initial_len = len(self.db["supplements"][user_id])
+        self.db["supplements"][user_id] = [s for s in self.db["supplements"][user_id] if s["id"] != supplement_id]
+        if len(self.db["supplements"][user_id]) < initial_len:
+            self.save_db()
+            return True
+        return False
 
 fallback_db = DbFallback()
 
