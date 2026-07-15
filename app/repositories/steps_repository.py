@@ -1,28 +1,15 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-import uuid
-from app.database.supabase import supabase_client, is_supabase_live
-from app.database.fallback import fallback_db
+from app.database.supabase import supabase_client
 
 class StepsRepository:
     def get_steps_by_date(self, user_id: str, date_str: str) -> Optional[Dict[str, Any]]:
         """Retrieves daily step counts for a user on a specific date."""
-        if not is_supabase_live():
-            user_steps = fallback_db.db.get("dailySteps", {}).get(user_id, [])
-            for s in user_steps:
-                if s["date"] == date_str:
-                    return s
-            return None
-
         res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
         return res.data if res else None
 
     def get_steps_history(self, user_id: str, start_date_str: str, end_date_str: str) -> List[Dict[str, Any]]:
         """Retrieves steps history for a date range."""
-        if not is_supabase_live():
-            user_steps = fallback_db.db.get("dailySteps", {}).get(user_id, [])
-            return [s for s in user_steps if start_date_str <= s["date"] <= end_date_str]
-
         res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).gte("date", start_date_str).lte("date", end_date_str).order("date", desc=False).execute()
         return res.data if res else []
 
@@ -53,15 +40,6 @@ class StepsRepository:
                 "updated_at": datetime.utcnow().isoformat() + "Z"
             }
             
-            if not is_supabase_live():
-                # Update inside list
-                for s in fallback_db.db["dailySteps"][user_id]:
-                    if s["date"] == date_str:
-                        s.update(update_data)
-                        break
-                fallback_db.save_db()
-                return {**existing, **update_data}
-                
             res = supabase_client.from_("daily_steps").update(update_data).eq("id", existing["id"]).execute()
             return res.data[0] if res and res.data else {}
         else:
@@ -82,14 +60,6 @@ class StepsRepository:
                 "updated_at": datetime.utcnow().isoformat() + "Z"
             }
             
-            if not is_supabase_live():
-                if user_id not in fallback_db.db["dailySteps"]:
-                    fallback_db.db["dailySteps"][user_id] = []
-                insert_data["id"] = str(uuid.uuid4())
-                fallback_db.db["dailySteps"][user_id].append(insert_data)
-                fallback_db.save_db()
-                return insert_data
-                
             res = supabase_client.from_("daily_steps").insert(insert_data).execute()
             return res.data[0] if res and res.data else {}
 
