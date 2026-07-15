@@ -33,7 +33,8 @@ class DbFallback:
             "dailySteps": {},
             "profiles": {},
             "weightHistory": {},
-            "supplements": {}
+            "supplements": {},
+            "referrals": []
         }
         self.init_db()
 
@@ -75,6 +76,10 @@ class DbFallback:
         chars = string.ascii_lowercase + string.digits
         return "".join(random.choice(chars) for _ in range(length))
 
+    def _generate_referral_code(self) -> str:
+        chars = string.ascii_uppercase + string.digits
+        return "FIT-" + "".join(random.choice(chars) for _ in range(6))
+
     # --- Users ---
     def get_user(self, user_id: str):
         if user_id not in self.db["users"]:
@@ -88,9 +93,22 @@ class DbFallback:
                 "weight": None,
                 "height": None,
                 "goals": None,
-                "profile_picture_url": None
+                "profile_picture_url": None,
+                "referral_code": self._generate_referral_code(),
+                "referred_by": None
             }
             self.save_db()
+        else:
+            user = self.db["users"][user_id]
+            updated = False
+            if "referral_code" not in user:
+                user["referral_code"] = self._generate_referral_code()
+                updated = True
+            if "referred_by" not in user:
+                user["referred_by"] = None
+                updated = True
+            if updated:
+                self.save_db()
         return self.db["users"][user_id]
 
     def update_user(self, user_id: str, updates: dict):
@@ -643,6 +661,67 @@ class DbFallback:
             self.save_db()
             return True
         return False
+
+    # --- Referrals ---
+    def get_referral_info(self, user_id: str) -> dict:
+        user = self.get_user(user_id)
+        code = user.get("referral_code") or ""
+        
+        # Find all users referred by this user
+        referred_users = []
+        for uid, u in self.db["users"].items():
+            if u.get("referred_by") == user_id:
+                referred_users.append({
+                    "id": uid,
+                    "name": u.get("name") or "Friend",
+                    "email": u.get("email") or ""
+                })
+        
+        # 100 points per referral
+        points = len(referred_users) * 100
+        
+        return {
+            "code": code,
+            "referrals": referred_users,
+            "points": points
+        }
+
+    def claim_referral_code(self, user_id: str, code: str) -> bool:
+        user = self.get_user(user_id)
+        if user.get("referred_by"):
+            raise ValueError("You have already claimed a referral code")
+            
+        clean_code = code.strip().upper()
+        
+        # Find code owner
+        owner_id = None
+        for uid, u in self.db["users"].items():
+            if u.get("referral_code", "").upper() == clean_code:
+                owner_id = uid
+                break
+                
+        if not owner_id:
+            raise ValueError("Invalid referral code")
+            
+        if owner_id == user_id:
+            raise ValueError("Cannot claim your own referral code")
+            
+        user["referred_by"] = owner_id
+        self.db["users"][user_id] = user
+        
+        # Add to referrals table/list
+        if "referrals" not in self.db:
+            self.db["referrals"] = []
+        self.db["referrals"].append({
+            "id": self.generate_id(),
+            "referrer_id": owner_id,
+            "referred_id": user_id,
+            "code_used": clean_code,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        })
+        
+        self.save_db()
+        return True
 
 fallback_db = DbFallback()
 

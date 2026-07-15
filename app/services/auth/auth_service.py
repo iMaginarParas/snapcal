@@ -19,7 +19,15 @@ class AuthService:
         try:
             res = supabase_client.auth.sign_up({"email": email, "password": password})
             if res.user:
-                return {"success": True, "data": {"user": {"email": res.user.email, "id": res.user.id}}}
+                token = res.session.access_token if (hasattr(res, 'session') and res.session) else None
+                return {
+                    "success": True,
+                    "token": token,
+                    "data": {
+                        "token": token,
+                        "user": {"email": res.user.email, "id": res.user.id}
+                    }
+                }
             raise BadRequestException(detail="Signup failed")
         except Exception as e:
             raise BadRequestException(detail=str(e))

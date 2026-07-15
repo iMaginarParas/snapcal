@@ -21,3 +21,12 @@ async def update_profile_picture(image: UploadFile = File(...), user_id: str = D
 def get_profile_history(user_id: str = Depends(get_current_user_id)):
     from app.services.users.profile_service import profile_service
     return profile_service.get_weight_history(user_id)
+
+# Plural routes
+users_plural_router = APIRouter(prefix="/users", tags=["Users"])
+
+@users_plural_router.get("/search")
+def search_users(q: str, user_id: str = Depends(get_current_user_id)):
+    from app.repositories.db_repository import db_repository
+    results = db_repository.search_users(q)
+    return {"success": True, "data": results}

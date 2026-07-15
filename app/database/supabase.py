@@ -7,6 +7,10 @@ def get_supabase_client() -> Client | None:
         logger.warning("Supabase credentials not fully configured. Running in fallback mode.")
         return None
         
+    if "your_supabase" in settings.SUPABASE_URL or "your_supabase" in settings.supabase_key:
+        logger.warning("Supabase credentials are using default placeholders. Running in fallback mode.")
+        return None
+        
     try:
         return create_client(settings.SUPABASE_URL, settings.supabase_key)
     except Exception as e:

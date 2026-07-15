@@ -309,6 +309,49 @@ def run_tests():
         res = client.delete(f"/api/supplements/{supp_id}", headers=headers)
         assert_status(res, 200, "DELETE /supplements/{id}")
 
+    # 34. Referrals API: Get Referral Info (User 1)
+    res = client.get("/api/referrals", headers=headers)
+    is_ref_info_ok = assert_status(res, 200, "GET /referrals")
+    user1_code = ""
+    if is_ref_info_ok:
+        user1_code = res.json().get("code")
+
+    # 35. Referrals API: Create User 2 and Claim User 1's Code
+    if user1_code:
+        # Create second user
+        client.post("/api/auth/signup", json={"email": "ref_friend@test.com", "password": "password123"})
+        res = client.post("/api/auth/login", json={"email": "ref_friend@test.com", "password": "password123"})
+        user2_token = res.json().get("token")
+        user2_headers = {"Authorization": f"Bearer {user2_token}"}
+        
+        # Claim code
+        res = client.post("/api/referrals/claim", json={"code": user1_code}, headers=user2_headers)
+        assert_status(res, 200, "POST /referrals/claim (Claim user1 code)")
+        
+        # Verify stats updated for User 1
+        res = client.get("/api/referrals", headers=headers)
+        if assert_status(res, 200, "GET /referrals after claim"):
+            data = res.json()
+            assert data.get("points") == 100, f"Expected 100 points, got {data.get('points')}"
+            assert len(data.get("referrals", [])) == 1, "Expected 1 referred friend"
+            print("[PASS] Referrals stats and points verification passed.")
+
+    # 36. User Search API
+    res = client.get("/api/users/search?q=friend", headers=headers)
+    assert_status(res, 200, "GET /users/search")
+
+    # 37. Friends suggestions
+    res = client.get("/api/friends/suggestions", headers=headers)
+    assert_status(res, 200, "GET /friends/suggestions")
+
+    # 38. Add friend
+    res = client.post("/api/friends/add", json={"email": "ref_friend@test.com"}, headers=headers)
+    assert_status(res, 200, "POST /friends/add")
+
+    # 39. Friends list
+    res = client.get("/api/friends", headers=headers)
+    assert_status(res, 200, "GET /friends")
+
     print("\n--- Test Results Summary ---")
     print(f"Total: {passed + failed}")
     print(f"Passed: {passed}")

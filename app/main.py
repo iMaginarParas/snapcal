@@ -8,7 +8,7 @@ from app.middleware.errors import add_exception_handlers
 
 # Import routers
 from app.api.auth import router as auth_router
-from app.api.users import router as users_router
+from app.api.users import router as users_router, users_plural_router
 from app.api.workouts import router as workouts_router
 from app.api.health import router as health_router
 from app.api.fasting import router as fasting_router
@@ -17,6 +17,8 @@ from app.api.analytics import router as analytics_router
 from app.api.meals import router as meals_router
 from app.api.steps import router as steps_router
 from app.api.supplements import router as supplements_router
+from app.api.referrals import router as referrals_router
+from app.api.friends import router as friends_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -36,6 +38,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 # Include Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
+app.include_router(users_plural_router, prefix=settings.API_V1_STR)
 app.include_router(workouts_router, prefix=settings.API_V1_STR)
 app.include_router(health_router, prefix=settings.API_V1_STR)
 app.include_router(fasting_router, prefix=settings.API_V1_STR)
@@ -44,6 +47,8 @@ app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(meals_router, prefix=settings.API_V1_STR)
 app.include_router(steps_router, prefix=settings.API_V1_STR)
 app.include_router(supplements_router, prefix=settings.API_V1_STR)
+app.include_router(referrals_router, prefix=settings.API_V1_STR)
+app.include_router(friends_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
