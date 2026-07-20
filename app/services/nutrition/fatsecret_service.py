@@ -22,7 +22,7 @@ class FatSecretService:
     def _get_access_token(self) -> Optional[str]:
         """Obtains OAuth2 access token from FatSecret."""
         if not is_configured:
-            return None
+            raise ValueError("FatSecret API Client ID/Secret are not configured. Please set them in environment variables.")
             
         try:
             url = "https://oauth.fatsecret.com/connect/token"
@@ -44,18 +44,16 @@ class FatSecretService:
                 return self.access_token
         except Exception as e:
             print(f"FatSecret Authentication Error: {e}")
-            return None
+            raise e
 
     def search_branded_food(self, query: str) -> Optional[Dict[str, Any]]:
         """Searches FatSecret for a food item and returns canonical macro mappings."""
         if not is_configured:
-            print("FatSecret API not configured. Returning simulated branded food.")
-            return self._get_mock_branded_food(query)
+            raise ValueError("FatSecret API Client ID/Secret are not configured. Please set them in environment variables.")
 
         token = self.access_token or self._get_access_token()
         if not token:
-            print("Could not obtain FatSecret token. Returning simulated branded food.")
-            return self._get_mock_branded_food(query)
+            raise ValueError("Could not obtain valid access token from FatSecret API.")
 
         try:
             # FatSecret API request to search foods
@@ -81,14 +79,14 @@ class FatSecretService:
                 # Fetch detailed nutrition info
                 return self.get_food_details(food_id)
         except Exception as e:
-            print(f"FatSecret search error: {e}. Falling back to mock.")
-            return self._get_mock_branded_food(query)
+            print(f"FatSecret Search Error: {e}")
+            raise e
 
     def get_food_details(self, food_id: str) -> Optional[Dict[str, Any]]:
         """Fetches detailed nutrition metrics from food_id."""
         token = self.access_token or self._get_access_token()
         if not token:
-            return None
+            raise ValueError("Could not obtain valid access token from FatSecret API.")
 
         try:
             params = urllib.parse.urlencode({
@@ -140,47 +138,6 @@ class FatSecretService:
                 }
         except Exception as e:
             print(f"FatSecret food details fetch error: {e}")
-            return None
-
-    def _get_mock_branded_food(self, query: str) -> Optional[Dict[str, Any]]:
-        """Mock fallback database for international and branded foods."""
-        query_lower = query.lower()
-        mock_db = {
-            "coca cola": {"calories": 42, "protein": 0.0, "carbs": 10.6, "fat": 0.0, "fiber": 0.0, "sodium": 4.0},
-            "oreo": {"calories": 480, "protein": 4.0, "carbs": 70.0, "fat": 20.0, "fiber": 2.5, "sodium": 520.0},
-            "kellogg": {"calories": 378, "protein": 7.0, "carbs": 84.0, "fat": 0.8, "fiber": 3.0, "sodium": 729.0},
-            "whey protein": {"calories": 400, "protein": 80.0, "carbs": 6.0, "fat": 6.0, "fiber": 0.0, "sodium": 160.0},
-            "subway": {"calories": 180, "protein": 14.0, "carbs": 24.0, "fat": 3.0, "fiber": 4.0, "sodium": 480.0},
-            "mcdonald": {"calories": 250, "protein": 12.0, "carbs": 30.0, "fat": 9.0, "fiber": 2.0, "sodium": 520.0},
-            "maggi": {"calories": 420, "protein": 8.0, "carbs": 62.0, "fat": 15.0, "fiber": 3.5, "sodium": 980.0},
-            "snickers": {"calories": 488, "protein": 8.6, "carbs": 60.0, "fat": 24.0, "fiber": 2.6, "sodium": 236.0}
-        }
-        
-        for key, val in mock_db.items():
-            if key in query_lower:
-                return {
-                    "food_name": query.title(),
-                    "calories": val["calories"],
-                    "protein": val["protein"],
-                    "carbs": val["carbs"],
-                    "fat": val["fat"],
-                    "fiber": val["fiber"],
-                    "sodium": val["sodium"],
-                    "serving_size_g": 100.0,
-                    "source": "FatSecret (Mock)"
-                }
-                
-        # Return a smart default branded item if no match
-        return {
-            "food_name": query.title(),
-            "calories": 220,
-            "protein": 6.5,
-            "carbs": 28.0,
-            "fat": 8.0,
-            "fiber": 1.5,
-            "sodium": 150.0,
-            "serving_size_g": 100.0,
-            "source": "FatSecret (Simulated)"
-        }
+            raise e
 
 fatsecret_service = FatSecretService()

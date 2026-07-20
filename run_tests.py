@@ -1,18 +1,501 @@
+import os
+os.environ["PORT"] = "3000"
+os.environ["GEMINI_API_KEY"] = "mock_gemini_key_for_testing_purposes"
+os.environ["SUPABASE_URL"] = "https://mockprojecturlfortests.supabase.co"
+os.environ["SUPABASE_ANON_KEY"] = "mockanonpublickeyfortestingpurposesonly"
+os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "mockservicerolekeyfortestingpurposesonly"
+
+from unittest.mock import patch, MagicMock
+# Mock the create_client call before importing app modules
+create_client_patcher = patch('supabase.create_client', return_value=MagicMock())
+create_client_patcher.start()
+
 import sys
 import json
 import io
 import uuid
+
+
+# ----------------- Mock Database Layer -----------------
+STORAGE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "data/storage.json"))
+
+def load_local_db() -> dict:
+    if not os.path.exists(STORAGE_FILE):
+        os.makedirs(os.path.dirname(STORAGE_FILE), exist_ok=True)
+        with open(STORAGE_FILE, "w") as f:
+            json.dump({}, f)
+    try:
+        with open(STORAGE_FILE, "r") as f:
+            data = json.load(f)
+            for section in ["users", "profiles", "meals", "foodItems", "workouts", "dailyStats", 
+                            "measurementLogs", "fastingLogs", "friendships", "challenges", 
+                            "userChallenges", "supplements", "referrals", "groups", "groupMembers", 
+                            "groupMessages", "exports", "exportAuditLogs"]:
+                if section not in data:
+                    if section in ["challenges", "groups"]:
+                        data[section] = []
+                    else:
+                        data[section] = {}
+            return data
+    except Exception:
+        return {}
+
+def save_local_db(data: dict):
+    try:
+        os.makedirs(os.path.dirname(STORAGE_FILE), exist_ok=True)
+        with open(STORAGE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+class MockUser:
+    def __init__(self, user_id: str, email: str):
+        self.id = user_id
+        self.email = email
+
+class MockSession:
+    def __init__(self, token: str):
+        self.access_token = token
+
+class MockAuthResponse:
+    def __init__(self, user_id: str, email: str, token: str):
+        self.user = MockUser(user_id, email)
+        self.session = MockSession(token)
+
+class MockAuth:
+    def sign_up(self, credentials: dict) -> MockAuthResponse:
+        email = credentials.get("email")
+        password = credentials.get("password")
+        if not email or not password:
+            raise Exception("Email and password required")
+        
+        db = load_local_db()
+        for u in db["users"].values():
+            if u.get("email") == email:
+                raise Exception("User already exists")
+        
+        user_id = str(uuid.uuid4())
+        user_record = {
+            "id": user_id,
+            "email": email,
+            "username": email.split("@")[0] + "_" + str(uuid.uuid4())[:4],
+            "created_at": "2026-07-19T00:00:00Z"
+        }
+        db["users"][user_id] = user_record
+        save_local_db(db)
+        
+        token = f"mock-token-{user_id}"
+        return MockAuthResponse(user_id, email, token)
+
+    def sign_in_with_password(self, credentials: dict) -> MockAuthResponse:
+        email = credentials.get("email")
+        password = credentials.get("password")
+        db = load_local_db()
+        for u in db["users"].values():
+            if u.get("email") == email:
+                user_id = u["id"]
+                token = f"mock-token-{user_id}"
+                return MockAuthResponse(user_id, email, token)
+        raise Exception("Invalid email or password")
+
+    def sign_in_with_id_token(self, credentials: dict) -> MockAuthResponse:
+        user_id = "mock-google-user-id"
+        db = load_local_db()
+        if user_id not in db["users"]:
+            db["users"][user_id] = {
+                "id": user_id,
+                "email": "google_user@test.com",
+                "username": "google_user",
+                "created_at": "2026-07-19T00:00:00Z"
+            }
+            save_local_db(db)
+        return MockAuthResponse(user_id, "google_user@test.com", f"mock-token-{user_id}")
+
+    def get_user(self, token: str) -> MockAuthResponse:
+        if not token or not token.startswith("mock-token-"):
+            raise Exception("Invalid session token")
+        user_id = token.replace("mock-token-", "")
+        db = load_local_db()
+        if user_id in db["users"]:
+            return MockAuthResponse(user_id, db["users"][user_id]["email"], token)
+        raise Exception("User not found")
+
+class MockResponse:
+    def __init__(self, data: any):
+        self.data = data
+
+class MockQueryBuilder:
+    def __init__(self, table: str):
+        self.table = table
+        self.filters = []
+        self.order_by = []
+        self.offset_val = 0
+        self.limit_val = None
+        self.is_single = False
+        self.is_maybe_single = False
+        self.operation = "select"
+        self.payload = None
+
+    def _map_table(self) -> str:
+        mapping = {
+            "users": "users",
+            "profiles": "profiles",
+            "workouts": "workouts",
+            "daily_stats": "dailyStats",
+            "measurement_logs": "measurementLogs",
+            "meals": "meals",
+            "food_items": "foodItems",
+            "fasting_logs": "fastingLogs",
+            "supplements": "supplements",
+            "friendships": "friendships",
+            "challenges": "challenges",
+            "user_challenges": "userChallenges",
+            "groups": "groups",
+            "group_members": "groupMembers",
+            "group_messages": "groupMessages",
+            "referrals": "referrals",
+            "exports": "exports",
+            "export_audit_logs": "exportAuditLogs"
+        }
+        return mapping.get(self.table, self.table)
+
+    def select(self, fields: str = "*") -> "MockQueryBuilder":
+        self.operation = "select"
+        self.select_fields = fields
+        return self
+
+    def insert(self, data: any) -> "MockQueryBuilder":
+        self.operation = "insert"
+        self.payload = data
+        return self
+
+    def update(self, data: any) -> "MockQueryBuilder":
+        self.operation = "update"
+        self.payload = data
+        return self
+
+    def upsert(self, data: any, on_conflict: str = None) -> "MockQueryBuilder":
+        self.operation = "upsert"
+        self.payload = data
+        return self
+
+    def delete(self) -> "MockQueryBuilder":
+        self.operation = "delete"
+        return self
+
+    def eq(self, col: str, val: any) -> "MockQueryBuilder":
+        self.filters.append(lambda r: str(r.get(col)) == str(val))
+        return self
+
+    def neq(self, col: str, val: any) -> "MockQueryBuilder":
+        self.filters.append(lambda r: str(r.get(col)) != str(val))
+        return self
+
+    def gte(self, col: str, val: any) -> "MockQueryBuilder":
+        self.filters.append(lambda r: r.get(col) is not None and str(r.get(col)) >= str(val))
+        return self
+
+    def lte(self, col: str, val: any) -> "MockQueryBuilder":
+        self.filters.append(lambda r: r.get(col) is not None and str(r.get(col)) <= str(val))
+        return self
+
+    def ilike(self, col: str, val: str) -> "MockQueryBuilder":
+        pattern = val.replace("%", "").lower()
+        self.filters.append(lambda r: r.get(col) is not None and pattern in str(r.get(col)).lower())
+        return self
+
+    def or_(self, filter_str: str, *args, **kwargs) -> "MockQueryBuilder":
+        parts = filter_str.split(",")
+        conditions = []
+        for part in parts:
+            if ".eq." in part:
+                col, val = part.split(".eq.")
+                conditions.append((col, val))
+            elif ".ilike." in part:
+                col, val = part.split(".ilike.")
+                pattern = val.replace("%", "").lower()
+                conditions.append((col, pattern, "ilike"))
+        
+        if conditions:
+            def or_filter(r):
+                for cond in conditions:
+                    if len(cond) == 3 and cond[2] == "ilike":
+                        col, pattern = cond[0], cond[1]
+                        if r.get(col) is not None and pattern in str(r.get(col)).lower():
+                            return True
+                    else:
+                        col, val = cond[0], cond[1]
+                        if str(r.get(col)) == str(val):
+                            return True
+                return False
+            self.filters.append(or_filter)
+        return self
+
+
+    def order(self, col: str, desc: bool = False) -> "MockQueryBuilder":
+        self.order_by.append((col, desc))
+        return self
+
+    def limit(self, val: int) -> "MockQueryBuilder":
+        self.limit_val = val
+        return self
+
+    def range(self, start: int, end: int) -> "MockQueryBuilder":
+        self.offset_val = start
+        self.limit_val = end - start + 1
+        return self
+
+    def single(self) -> "MockQueryBuilder":
+        self.is_single = True
+        return self
+
+    def maybe_single(self) -> "MockQueryBuilder":
+        self.is_maybe_single = True
+        return self
+
+    def execute(self) -> MockResponse:
+        db = load_local_db()
+        mapped_table = self._map_table()
+        
+        if mapped_table not in db:
+            db[mapped_table] = [] if mapped_table in ["challenges", "groups"] else {}
+
+        collection = db[mapped_table]
+
+        if self.operation == "select":
+            items = []
+            if isinstance(collection, dict):
+                items = list(collection.values())
+            else:
+                items = collection
+
+            filtered = []
+            for r in items:
+                match = True
+                for f in self.filters:
+                    try:
+                        if not f(r):
+                            match = False
+                            break
+                    except Exception:
+                        match = False
+                        break
+                if match:
+                    filtered.append(r)
+
+            for col, desc in self.order_by:
+                filtered.sort(key=lambda x: x.get(col) or "", reverse=desc)
+
+            if self.offset_val > 0:
+                filtered = filtered[self.offset_val:]
+            if self.limit_val is not None:
+                filtered = filtered[:self.limit_val]
+
+            if self.is_single:
+                if not filtered:
+                    raise Exception("No rows found")
+                return MockResponse(filtered[0])
+            if self.is_maybe_single:
+                return MockResponse(filtered[0] if filtered else None)
+            return MockResponse(filtered)
+
+        elif self.operation in ["insert", "upsert", "update"]:
+            payloads = self.payload if isinstance(self.payload, list) else [self.payload]
+            inserted_items = []
+
+            for p in payloads:
+                item_id = p.get("id") or str(uuid.uuid4())
+                item_record = dict(p)
+                item_record["id"] = item_id
+
+                if isinstance(collection, dict):
+                    if self.operation == "update":
+                        matching_keys = []
+                        for k, r in collection.items():
+                            match = True
+                            for f in self.filters:
+                                if not f(r):
+                                    match = False
+                                    break
+                            if match:
+                                matching_keys.append(k)
+                        for k in matching_keys:
+                            collection[k].update(p)
+                            inserted_items.append(collection[k])
+                    else:
+                        collection[item_id] = item_record
+                        inserted_items.append(item_record)
+                else:
+                    if self.operation == "update":
+                        for r in collection:
+                            match = True
+                            for f in self.filters:
+                                if not f(r):
+                                    match = False
+                                    break
+                            if match:
+                                r.update(p)
+                                inserted_items.append(r)
+                    else:
+                        collection.append(item_record)
+                        inserted_items.append(item_record)
+
+            save_local_db(db)
+            if self.is_single or self.is_maybe_single:
+                return MockResponse(inserted_items[0] if inserted_items else None)
+            return MockResponse(inserted_items)
+
+        elif self.operation == "delete":
+            deleted_items = []
+            if isinstance(collection, dict):
+                keys_to_delete = []
+                for k, r in collection.items():
+                    match = True
+                    for f in self.filters:
+                        try:
+                            if not f(r):
+                                match = False
+                                break
+                        except Exception:
+                            match = False
+                            break
+                    if match:
+                        keys_to_delete.append(k)
+                        deleted_items.append(r)
+                
+                for k in keys_to_delete:
+                    del collection[k]
+            else:
+                items_to_keep = []
+                for r in collection:
+                    match = True
+                    for f in self.filters:
+                        try:
+                            if not f(r):
+                                match = False
+                                break
+                        except Exception:
+                            match = False
+                            break
+                    if match:
+                        deleted_items.append(r)
+                    else:
+                        items_to_keep.append(r)
+                db[mapped_table] = items_to_keep
+
+            save_local_db(db)
+            return MockResponse(deleted_items)
+
+        return MockResponse(None)
+
+class MockSupabaseClient:
+    def __init__(self):
+        self.auth = MockAuth()
+
+    def from_(self, table: str) -> MockQueryBuilder:
+        return MockQueryBuilder(table)
+
+# ----------------- Inject Test Mocks into App modules -----------------
+import app.database.supabase
+app.database.supabase.supabase_client = MockSupabaseClient()
+
+import app.services.nutrition.usda_service
+mock_usda = MagicMock()
+mock_usda.search_usda_food.return_value = {
+    "food_name": "Idli",
+    "calories": 98,
+    "protein": 2.2,
+    "carbs": 21.8,
+    "fat": 0.3,
+    "fiber": 0.9,
+    "sodium": 30.0,
+    "serving_size_g": 100.0,
+    "source": "USDA"
+}
+app.services.nutrition.usda_service.usda_service = mock_usda
+
+import app.services.nutrition.fatsecret_service
+mock_fatsecret = MagicMock()
+mock_fatsecret.search_branded_food.return_value = {
+    "food_name": "Product 12345678",
+    "calories": 180,
+    "protein": 6.0,
+    "carbs": 24.0,
+    "fat": 5.0,
+    "fiber": 1.5,
+    "sodium": 150.0,
+    "serving_size_g": 100.0,
+    "source": "FatSecret"
+}
+app.services.nutrition.fatsecret_service.fatsecret_service = mock_fatsecret
+
+# ----------------- Mock Gemini AI API Client -----------------
+class MockGeminiResponse:
+    def __init__(self, text):
+        self.text = text
+
+def mock_generate_content(prompt_or_list):
+    if isinstance(prompt_or_list, list):
+        return MockGeminiResponse(json.dumps({
+            "meal_type": "Lunch",
+            "estimated_total_weight": 420,
+            "image_quality": "Good",
+            "foods": [
+                {
+                    "name": "Chicken Biryani",
+                    "food_name": "Chicken Biryani",
+                    "weight_g": 350,
+                    "confidence": 95,
+                    "cooking_method": "Cooked",
+                    "ingredients": ["Rice", "Chicken", "Spices", "Oil"]
+                }
+            ]
+        }))
+        
+    prompt = str(prompt_or_list)
+    if "healthy meal choice" in prompt:
+        return MockGeminiResponse(json.dumps({"name": "Salmon Salad", "calories": 380, "protein": 32.0, "carbs": 8.0, "fats": 24.0}))
+    elif "food description" in prompt:
+        return MockGeminiResponse(json.dumps({"name": "Idli", "calories": 98, "protein": 2.2, "carbs": 21.8, "fats": 0.3}))
+    elif "nutrition label" in prompt:
+        return MockGeminiResponse(json.dumps({"name": "Nutrition Label Product", "calories": 250, "protein": 12.0, "carbs": 30.0, "fats": 8.0}))
+    elif "UPC/barcode" in prompt:
+        return MockGeminiResponse(json.dumps({"name": "Product 12345678", "calories": 180, "protein": 6.0, "carbs": 24.0, "fats": 5.0}))
+    elif "user data" in prompt:
+        return MockGeminiResponse("Fantastic effort! You've logged multiple workouts this week.")
+    elif "daily health activity" in prompt:
+        return MockGeminiResponse(json.dumps({
+            "summary": "You had a highly active day, hitting your step goals.",
+            "didBetter": "Great job meeting your water target.",
+            "toImprove": "Try to focus on increasing your protein intake tomorrow."
+        }))
+    return MockGeminiResponse("{}")
+
+mock_model = MagicMock()
+mock_model.generate_content.side_effect = mock_generate_content
+
+patcher = patch('google.generativeai.GenerativeModel', return_value=mock_model)
+patcher.start()
+
+# ----------------- Start FastAPI Client -----------------
 from fastapi.testclient import TestClient
 from app.main import app
 
-# Create TestClient
 try:
     client = TestClient(app)
 except ImportError:
     print("TestClient requires httpx. Please install it.")
     sys.exit(1)
 
+
 def run_tests():
+    # Clear local storage on start to ensure clean test runs
+    if os.path.exists(STORAGE_FILE):
+        try:
+            os.remove(STORAGE_FILE)
+        except Exception:
+            pass
+
     passed = 0
     failed = 0
 

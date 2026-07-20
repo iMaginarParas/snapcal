@@ -9,12 +9,13 @@ load_dotenv()
 
 # Configure Gemini API Key
 api_key = os.getenv("GEMINI_API_KEY") or ""
-is_placeholder = not api_key or api_key == "your_gemini_api_key_here" or "placeholder" in api_key
+if not api_key or api_key == "your_gemini_api_key_here" or "placeholder" in api_key.lower():
+    raise ValueError("Critical Configuration Error: GEMINI_API_KEY must be configured in environment variables.")
 
-if is_placeholder:
-    raise ValueError("CRITICAL: Gemini API Key not configured. Running in production mode requires a valid key.")
-
-genai.configure(api_key=api_key)
+try:
+    genai.configure(api_key=api_key)
+except Exception as e:
+    raise ValueError(f"Failed to configure Gemini client: {e}")
 
 def preprocess_image(image_bytes: bytes) -> bytes:
     """
@@ -102,6 +103,7 @@ Example output format:
         raise ValueError(f"Gemini Vision API Error: {e}")
 
 def generate_mock_meal_with_ai() -> dict:
+    """Gets a healthy meal choice recommendation and macronutrient estimates from Gemini."""
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = """Generate a realistic, healthy meal choice suitable for a fitness tracking application (e.g., Avocado Toast, Salmon Salad, Chicken Protein Bowl, Greek Yogurt with Berries, etc.) and estimate its nutritional values.
@@ -111,7 +113,7 @@ def generate_mock_meal_with_ai() -> dict:
         cleaned_text = text.replace("```json", "").replace("```", "").strip()
         return json.loads(cleaned_text)
     except Exception as e:
-        raise ValueError(f"Gemini Mock Meal Error: {e}")
+        raise ValueError(f"Gemini Meal Generation Error: {e}")
 
 def analyze_meal_text_with_ai(description: str) -> dict:
     try:
