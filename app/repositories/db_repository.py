@@ -340,4 +340,8 @@ class DBRepository:
         except Exception:
             return []
 
+    def create_support_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
+        res = supabase_client.from_("support_tickets").insert(ticket_data).execute()
+        return res.data[0] if res and res.data else {}
+
 db_repository = DBRepository()

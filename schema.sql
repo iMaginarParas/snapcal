@@ -1,4 +1,4 @@
--- SABTRACK AI (FitFlow AI) Supabase Schema
+-- SABTRACK AI Supabase Schema
 -- Run this in your Supabase SQL Editor
 
 -- Create extension for UUIDs if not exists
@@ -172,7 +172,7 @@ DROP POLICY IF EXISTS "Users can manage exercises" ON public.workout_exercises;
 CREATE POLICY "Users can manage exercises" ON public.workout_exercises FOR ALL USING (true);
 
 
--- --- SABTRACK AI UPDATES (FitFlow AI) ---
+-- --- SABTRACK AI UPDATES ---
 
 -- 1. Alter users table to add profile_picture_url and unique username columns
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
@@ -424,6 +424,21 @@ CREATE TABLE IF NOT EXISTS public.export_audit_logs (
 ALTER TABLE public.export_audit_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view own audit logs" ON public.export_audit_logs;
 CREATE POLICY "Users can view own audit logs" ON public.export_audit_logs FOR SELECT USING (auth.uid() = user_id);
+
+-- 17. Support Tickets Table
+CREATE TABLE IF NOT EXISTS public.support_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    email TEXT NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own support tickets" ON public.support_tickets;
+CREATE POLICY "Users can manage own support tickets" ON public.support_tickets FOR ALL USING (auth.uid() = user_id OR auth.uid() IS NULL);
 
 
 
