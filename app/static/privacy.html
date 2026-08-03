@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy & Terms of Service - SABTRACK AI</title>
+    <meta name="description" content="Read the Privacy Policy and Terms of Service for SABTRACK AI. Learn how we handle your data, protect your privacy, and manage terms of use.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F172A;
+            --primary-light: #1E293B;
+            --accent: #10B981;
+            --accent-hover: #059669;
+            --accent-light: #D1FAE5;
+            --text-dark: #0F172A;
+            --text-muted: #64748B;
+            --bg-body: #F8FAFC;
+            --card-bg: #FFFFFF;
+            --border: #E2E8F0;
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01);
+            --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.04);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-dark);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navigation Header */
+        header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 800;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .brand-name {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 800;
+            font-size: 20px;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+
+        .badge-google {
+            font-size: 12px;
+            font-weight: 600;
+            color: #047857;
+            background: var(--accent-light);
+            padding: 6px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+
+        .hero-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .hero-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-muted);
+            max-width: 620px;
+            margin: 0 auto;
+        }
+
+        /* Segment / Tab Switcher */
+        .tab-container {
+            max-width: 480px;
+            margin: 0 auto 36px;
+            height: 52px;
+            background: #F1F5F9;
+            border-radius: 16px;
+            padding: 4px;
+            display: flex;
+            position: relative;
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            z-index: 2;
+            transition: color 0.2s ease;
+            border-radius: 12px;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+        }
+
+        .tab-indicator {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            left: 4px;
+            width: calc(50% - 4px);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            z-index: 1;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Content Sections */
+        .content-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            box-shadow: var(--shadow-md);
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .content-card.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Typography & Layout inside Cards */
+        .last-updated {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legal-section {
+            margin-bottom: 32px;
+        }
+
+        .legal-section:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title svg {
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .legal-text {
+            font-size: 15px;
+            color: #475569;
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+
+        /* Bullet lists */
+        .bullet-list {
+            list-style: none;
+            margin-bottom: 16px;
+            padding-left: 4px;
+        }
+
+        .bullet-list li {
+            font-size: 14px;
+            color: #475569;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            line-height: 1.6;
+        }
+
+        .bullet-list li::before {
+            content: "•";
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 18px;
+            line-height: 1;
+            margin-top: -1px;
+        }
+
+        .bullet-list strong {
+            color: var(--primary);
+        }
+
+        /* Banner / Callout box */
+        .callout-box {
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-top: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        @media (max-width: 640px) {
+            .callout-box {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        .callout-content {
+            flex: 1;
+        }
+
+        .callout-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #14532D;
+            margin-bottom: 4px;
+        }
+
+        .callout-desc {
+            font-size: 13.5px;
+            color: #166534;
+        }
+
+        .btn-callout {
+            padding: 12px 20px;
+            background: var(--primary);
+            color: white;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-callout:hover {
+            background: var(--primary-light);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 30px 24px;
+            color: var(--text-muted);
+            font-size: 13px;
+            border-top: 1px solid var(--border);
+            background: white;
+            margin-top: auto;
+        }
+
+        footer a {
+            color: var(--accent-hover);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="nav-container">
+            <a href="#" class="brand">
+                <div class="brand-logo">S</div>
+                <span class="brand-name">SABTRACK AI</span>
+            </a>
+            <div class="badge-google">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Google Play Compliant
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="hero-section">
+            <h1 class="hero-title" id="page-title">Privacy &amp; Terms</h1>
+            <p class="hero-subtitle">We are committed to data privacy, absolute transparency, and providing safe AI-assisted nutrition insights.</p>
+        </div>
+
+        <!-- Segment Switcher -->
+        <div class="tab-container">
+            <button class="tab-btn active" id="tab-privacy-btn" onclick="switchTab('privacy')">Privacy Policy</button>
+            <button class="tab-btn" id="tab-terms-btn" onclick="switchTab('terms')">Terms of Service</button>
+            <div class="tab-indicator" id="tab-indicator"></div>
+        </div>
+
+        <!-- Privacy Policy Card -->
+        <article class="content-card active" id="privacy-card">
+            <div class="last-updated">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Last Updated: June 2026
+            </div>
+
+            <section class="legal-section">
+                <p class="legal-text">
+                    We value your privacy and are committed to protecting your personal data. This Privacy Policy details how we collect, use, and secure your information when you use SABTRACK AI.
+                </p>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Information We Collect
+                </h2>
+                <p class="legal-text">
+                    SABTRACK AI processes and secures the following types of data to deliver personalized fitness and nutrition tracking:
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Account Data:</strong> Hashed email addresses and password credentials. These are securely routed and managed via our database hosting providers (Supabase Authentication).</li>
+                    <li><strong>Nutritional Logs:</strong> Details of meals tracked, description queries, portion sizes, calorie counts, and macro profiles.</li>
+                    <li><strong>Fasting &amp; Weight History:</strong> Personal progress statistics, fasting duration logs, and weight history to calculate health charts and personal goal progress.</li>
+                    <li><strong>Uploaded Images:</strong> Meal and food pictures captured by you to perform AI-based nutrition estimation. These images are transmitted directly to Google Gemini APIs to parse nutritional components.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    How We Use Your Data
+                </h2>
+                <p class="legal-text">
+                    Your personal information is used strictly to provide the core services of the app, including:
+                </p>
+                <ul class="bullet-list">
+                    <li>Rendering personal fitness dashboards, progress statistics, and analytics.</li>
+                    <li>Calculating active calorie requirements and adjusting nutritional milestones.</li>
+                    <li>Synchronizing logs in real-time across your authorized devices.</li>
+                    <li>Providing shared space coordination for community groups and friend connections.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Third-Party Services &amp; API Integration
+                </h2>
+                <p class="legal-text">
+                    We do not sell, rent, or distribute your personal details to third-party advertising services. In order to provide key services, we partner with industry-standard secure services:
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Supabase:</strong> For cloud data hosting, database integrity, and authentication APIs.</li>
+                    <li><strong>Google Gemini API:</strong> For processing meal image files and generating macronutrient breakdown values. Image files are not retained or saved by our server after analysis.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Data Retention &amp; Deletion Rights
+                </h2>
+                <p class="legal-text">
+                    We honor your full rights over your data. At any time, you can wipe all your information from our database.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Immediate In-App Deletion:</strong> Clicking "Delete Account" inside the app settings instantly and permanently purges your user profile, nutrition logs, fasting logs, and weight metrics.</li>
+                    <li><strong>Web Requests:</strong> You can submit a manual deletion request online. Web requests are fully processed within 14 to 30 calendar days.</li>
+                    <li><strong>Compliance &amp; Exception Logs:</strong> Minimal, anonymized request records may be kept temporarily solely for verification, security auditing, and fraud prevention purposes.</li>
+                </ul>
+            </section>
+
+            <!-- Data Deletion CTA -->
+            <div class="callout-box">
+                <div class="callout-content">
+                    <h3 class="callout-title">Need to delete your account or wipe your data?</h3>
+                    <p class="callout-desc">You can submit an immediate web deletion request here. We will process it within 14-30 days.</p>
+                </div>
+                <a href="/delete-account" class="btn-callout" id="btn-goto-delete">Delete Account Request</a>
+            </div>
+        </article>
+
+        <!-- Terms of Service Card -->
+        <article class="content-card" id="terms-card">
+            <div class="last-updated">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Last Updated: June 2026
+            </div>
+
+            <section class="legal-section">
+                <p class="legal-text">
+                    Welcome to SABTRACK AI. Please read these Terms of Service ("Terms") carefully before using our mobile application and related API services.
+                </p>
+                <p class="legal-text">
+                    By accessing or using SABTRACK AI, you agree to be bound by these Terms. If you do not agree to all of the terms and conditions, you are prohibited from using the application.
+                </p>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    1. Use of AI Services &amp; Disclaimer
+                </h2>
+                <p class="legal-text">
+                    SABTRACK AI provides nutrition estimates using artificial intelligence systems. These estimates are generated based on photo uploads and text inputs.
+                </p>
+                <ul class="bullet-list">
+                    <li>You acknowledge that AI estimations are predictions and may contain inaccuracies or variations.</li>
+                    <li>The information provided inside this app is for tracking purposes only and <strong>should not</strong> replace professional medical advice, consultation, or dietetic programs.</li>
+                    <li>Always consult a certified physician or healthcare professional before beginning any intensive diet plans or fasting programs.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    2. User Accounts
+                </h2>
+                <p class="legal-text">
+                    To access history features, profile tracking, and shared groups, users are required to sign up.
+                </p>
+                <ul class="bullet-list">
+                    <li>You are responsible for maintaining the confidentiality of your login credentials.</li>
+                    <li>You must provide accurate, complete, and current information when creating an account.</li>
+                    <li>You accept responsibility for all activities that occur under your account.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    3. User Conduct
+                </h2>
+                <p class="legal-text">
+                    You agree not to perform actions that compromise the safety, integrity, or speed of our services. Prohibited actions include:
+                </p>
+                <ul class="bullet-list">
+                    <li>Bypassing Row-Level Security (RLS) backend database policies.</li>
+                    <li>Uploading non-food photos or corrupted file assets engineered to disrupt analysis models.</li>
+                    <li>Injecting malicious code or executing script automation against public endpoints.</li>
+                </ul>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    4. Intellectual Property
+                </h2>
+                <p class="legal-text">
+                    SABTRACK AI, its original features, source code, app layouts, database designs, graphics, and system architecture are protected under international copyright and intellectual property treaties and belong exclusively to the application developers.
+                </p>
+            </section>
+
+            <section class="legal-section">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    5. Limitation of Liability
+                </h2>
+                <p class="legal-text">
+                    To the maximum extent permitted by law, SABTRACK AI and its creators shall not be liable for any health complications, medical outcomes, dietary errors, incorrect macro estimations, or service disruptions arising from your use of the application.
+                </p>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 SABTRACK AI. All rights reserved. | Need help? Contact <a href="mailto:support@sabtrack.in">support@sabtrack.in</a></p>
+    </footer>
+
+    <script>
+        function switchTab(tab) {
+            const privacyBtn = document.getElementById('tab-privacy-btn');
+            const termsBtn = document.getElementById('tab-terms-btn');
+            const privacyCard = document.getElementById('privacy-card');
+            const termsCard = document.getElementById('terms-card');
+            const indicator = document.getElementById('tab-indicator');
+
+            if (tab === 'privacy') {
+                privacyBtn.classList.add('active');
+                termsBtn.classList.remove('active');
+                privacyCard.classList.add('active');
+                termsCard.classList.remove('active');
+                indicator.style.transform = 'translateX(0)';
+                window.location.hash = 'privacy';
+            } else if (tab === 'terms') {
+                privacyBtn.classList.remove('active');
+                termsBtn.classList.add('active');
+                privacyCard.classList.remove('active');
+                termsCard.classList.add('active');
+                indicator.style.transform = 'translateX(100%)';
+                window.location.hash = 'terms';
+            }
+        }
+
+        // Initialize based on URL hash
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash === 'terms') {
+                switchTab('terms');
+            } else {
+                switchTab('privacy');
+            }
+        });
+
+        // Listen for back/forward hash changes
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash === 'terms') {
+                switchTab('terms');
+            } else if (hash === 'privacy') {
+                switchTab('privacy');
+            }
+        });
+    </script>
+</body>
+</html>

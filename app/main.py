@@ -51,6 +51,15 @@ def serve_delete_account_page():
     return HTMLResponse("<h1>Delete Account Page</h1>")
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+@app.get("/privacy.html", response_class=HTMLResponse)
+def serve_privacy_page():
+    html_path = os.path.join(STATIC_DIR, "privacy.html")
+    if os.path.exists(html_path):
+        return FileResponse(html_path)
+    return HTMLResponse("<h1>Privacy Policy Page</h1>")
+
+
 # Include Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)

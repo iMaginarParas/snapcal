@@ -517,6 +517,16 @@ def run_tests():
     res = client.get("/health")
     assert_status(res, 200, "Health Check")
 
+    # 1a. Static Pages checks
+    res = client.get("/privacy")
+    assert_status(res, 200, "GET /privacy")
+    res = client.get("/privacy.html")
+    assert_status(res, 200, "GET /privacy.html")
+    res = client.get("/delete-account")
+    assert_status(res, 200, "GET /delete-account")
+    res = client.get("/delete-account.html")
+    assert_status(res, 200, "GET /delete-account.html")
+
     # 2. Mock Signup
     res = client.post("/api/auth/signup", json={"email": "test_food@test.com", "password": "password123"})
     assert_status(res, 200, "User Signup")
