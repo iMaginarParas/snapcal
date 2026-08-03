@@ -32,10 +32,24 @@ app = FastAPI(
 add_cors_middleware(app)
 add_exception_handlers(app)
 
-# Ensure uploads folder exists and mount static files
+from fastapi.responses import FileResponse, HTMLResponse
+
+# Ensure uploads and static folders exist and mount static files
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "../uploads")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/delete-account", response_class=HTMLResponse)
+@app.get("/delete-account.html", response_class=HTMLResponse)
+def serve_delete_account_page():
+    html_path = os.path.join(STATIC_DIR, "delete-account.html")
+    if os.path.exists(html_path):
+        return FileResponse(html_path)
+    return HTMLResponse("<h1>Delete Account Page</h1>")
+
 
 # Include Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
