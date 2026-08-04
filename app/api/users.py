@@ -22,6 +22,25 @@ def get_profile_history(user_id: str = Depends(get_current_user_id)):
     from app.services.users.profile_service import profile_service
     return profile_service.get_weight_history(user_id)
 
+from pydantic import BaseModel
+class NutritionGoalsPayload(BaseModel):
+    calorie_goal: float
+    protein_goal: float
+    carbs_goal: float
+    fats_goal: float
+
+@router.get("/nutrition-goals")
+def get_nutrition_goals(user_id: str = Depends(get_current_user_id)):
+    from app.repositories.db_repository import db_repository
+    return {"success": True, "data": db_repository.get_nutrition_goals(user_id)}
+
+@router.put("/nutrition-goals")
+def update_nutrition_goals(payload: NutritionGoalsPayload, user_id: str = Depends(get_current_user_id)):
+    from app.repositories.db_repository import db_repository
+    res = db_repository.update_nutrition_goals(user_id, payload.dict())
+    return {"success": True, "data": res}
+
+
 # Plural routes
 users_plural_router = APIRouter(prefix="/users", tags=["Users"])
 

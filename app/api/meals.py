@@ -59,6 +59,8 @@ async def analyze_nutrition_endpoint(
         }
 
 @router.post("/nutrition/analyze-text")
+@router.post("/nutrition/describe")
+@router.post("/meal/analyze-text")
 async def analyze_nutrition_text_endpoint(
     request: Request,
     user_id: str = Depends(get_current_user_id)
@@ -84,22 +86,15 @@ async def analyze_nutrition_text_endpoint(
 
 @router.post("/nutrition/analyze-label")
 async def analyze_nutrition_label_endpoint(
-    request: Request,
+    image: Optional[UploadFile] = File(None),
+    description: Optional[str] = Form(None),
     user_id: str = Depends(get_current_user_id)
 ):
-    content_type = request.headers.get("content-type", "")
     from app.services.ai.vision_service import analyze_meal_label_with_ai
     
-    if "multipart/form-data" in content_type:
-        form = await request.form()
-        image = form.get("image")
-        description = form.get("description")
-        
-        if not image or not isinstance(image, UploadFile):
-            return {"success": False, "error": "Image file is required"}
-            
+    if image:
         image_bytes = await image.read()
-        res = analyze_meal_label_with_ai(image_bytes, image.content_type, custom_prompt=description)
+        res = analyze_meal_label_with_ai(image_bytes, image.content_type or "image/jpeg", custom_prompt=description)
         return {
             "success": True,
             "data": {
@@ -110,17 +105,16 @@ async def analyze_nutrition_label_endpoint(
                 "fats": res.get("fats") or 0.0
             }
         }
-    else:
-        return {
-            "success": True,
-            "data": {
-                "name": "Nutrition Label Scan",
-                "calories": 220,
-                "protein": 12.0,
-                "carbs": 28.0,
-                "fats": 6.0
-            }
+    return {
+        "success": True,
+        "data": {
+            "name": "Nutrition Label Scan",
+            "calories": 220,
+            "protein": 12.0,
+            "carbs": 28.0,
+            "fats": 6.0
         }
+    }
 
 # --- Save Meal ---
 @router.post("/meal/save")

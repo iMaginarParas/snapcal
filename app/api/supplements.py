@@ -74,3 +74,17 @@ def delete_supplement(supplement_id: str, user_id: str = Depends(get_current_use
     if not success:
         raise HTTPException(status_code=404, detail="Supplement not found or not owned by user")
     return {"success": True, "message": "Supplement deleted successfully"}
+
+from typing import Optional
+from fastapi import Query
+
+@router.get("/logs")
+def get_supplement_logs(date: str = Query(...), user_id: str = Depends(get_current_user_id)):
+    logs = db_repository.get_supplement_logs(user_id, date)
+    return {"success": True, "data": logs}
+
+@router.post("/{supplement_id}/log")
+def log_supplement_taken(supplement_id: str, date: str = Query(...), user_id: str = Depends(get_current_user_id)):
+    res = db_repository.log_supplement_taken(user_id, supplement_id, date)
+    return {"success": True, "data": res}
+

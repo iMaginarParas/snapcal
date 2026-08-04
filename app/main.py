@@ -21,6 +21,9 @@ from app.api.referrals import router as referrals_router
 from app.api.friends import router as friends_router
 from app.api.exports import router as exports_router
 from app.api.support import router as support_router
+from app.api.badges import router as badges_router
+from app.api.dm import router as dm_router
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -76,6 +79,8 @@ app.include_router(referrals_router, prefix=settings.API_V1_STR)
 app.include_router(friends_router, prefix=settings.API_V1_STR)
 app.include_router(exports_router, prefix=settings.API_V1_STR)
 app.include_router(support_router, prefix=settings.API_V1_STR)
+app.include_router(badges_router, prefix=settings.API_V1_STR)
+app.include_router(dm_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():

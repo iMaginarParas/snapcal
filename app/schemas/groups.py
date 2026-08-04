@@ -5,3 +5,7 @@ class GroupCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
     is_public: Optional[bool] = True
+
+class GroupMessageRequest(BaseModel):
+    message: str
+

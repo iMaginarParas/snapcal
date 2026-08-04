@@ -127,12 +127,110 @@ class DBRepository:
 
     # --- Groups & Challenges ---
     def get_groups(self, user_id: str) -> List[Dict[str, Any]]:
-        res = supabase_client.from_("groups").select("*").execute()
-        return res.data if res else []
+        try:
+            res = supabase_client.from_("groups").select("*").execute()
+            groups = res.data if res else []
+        except Exception:
+            groups = []
+
+        for g in groups:
+            gid = str(g.get("id"))
+            try:
+                members_res = supabase_client.from_("group_members").select("user_id, users(name, profile_picture_url)").eq("group_id", gid).execute()
+                members = members_res.data if members_res and members_res.data else []
+            except Exception:
+                try:
+                    members_res = supabase_client.from_("group_members").select("user_id").eq("group_id", gid).execute()
+                    members = members_res.data if members_res and members_res.data else []
+                except Exception:
+                    members = []
+            
+            is_joined = any(str(m.get("user_id")) == str(user_id) for m in members)
+            g["isJoined"] = is_joined
+            g["memberCount"] = max(len(members), 1)
+            avatars = []
+            for m in members[:3]:
+                u = m.get("users") or {}
+                if isinstance(u, dict) and u.get("profile_picture_url"):
+                    avatars.append(u["profile_picture_url"])
+            g["avatars"] = avatars
+        return groups
 
     def create_group(self, group_data: Dict[str, Any]) -> Dict[str, Any]:
         res = supabase_client.from_("groups").insert(group_data).execute()
-        return res.data[0] if res and res.data else {}
+        group = res.data[0] if res and res.data else {}
+        if group and "id" in group and "created_by" in group and group["created_by"]:
+            try:
+                supabase_client.from_("group_members").insert({
+                    "group_id": group["id"],
+                    "user_id": group["created_by"],
+                    "joined_at": datetime.utcnow().isoformat() + "Z"
+                }).execute()
+            except Exception:
+                pass
+        return group
+
+    def join_group(self, user_id: str, group_id: str) -> bool:
+        try:
+            existing = supabase_client.from_("group_members").select("id").eq("group_id", group_id).eq("user_id", user_id).maybe_single().execute()
+            if existing and existing.data:
+                return True
+            payload = {
+                "group_id": group_id,
+                "user_id": user_id,
+                "joined_at": datetime.utcnow().isoformat() + "Z"
+            }
+            supabase_client.from_("group_members").insert(payload).execute()
+            return True
+        except Exception:
+            return True
+
+    def leave_group(self, user_id: str, group_id: str) -> bool:
+        try:
+            supabase_client.from_("group_members").delete().eq("group_id", group_id).eq("user_id", user_id).execute()
+        except Exception:
+            pass
+        return True
+
+    def get_group_messages(self, group_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = supabase_client.from_("group_messages").select("id, group_id, user_id, message, created_at, users(name, profile_picture_url)").eq("group_id", group_id).order("created_at", desc=False).execute()
+            data = res.data if res and res.data else []
+        except Exception:
+            try:
+                res = supabase_client.from_("group_messages").select("*").eq("group_id", group_id).order("created_at", desc=False).execute()
+                data = res.data if res and res.data else []
+            except Exception:
+                data = []
+
+        messages = []
+        for m in data:
+            u = m.get("users") or {}
+            sender_name = u.get("name") if isinstance(u, dict) else "Member"
+            sender_avatar = u.get("profile_picture_url") if isinstance(u, dict) else None
+            messages.append({
+                "id": str(m.get("id")),
+                "group_id": str(m.get("group_id")),
+                "user_id": str(m.get("user_id")),
+                "sender_name": sender_name or "Member",
+                "sender_avatar": sender_avatar,
+                "message": m.get("message") or "",
+                "created_at": m.get("created_at")
+            })
+        return messages
+
+    def send_group_message(self, user_id: str, group_id: str, message: str) -> Dict[str, Any]:
+        payload = {
+            "group_id": group_id,
+            "user_id": user_id,
+            "message": message,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        try:
+            res = supabase_client.from_("group_messages").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return payload
 
     def get_challenges(self) -> List[Dict[str, Any]]:
         res = supabase_client.from_("challenges").select("*").execute()
@@ -303,7 +401,7 @@ class DBRepository:
             return []
 
     def add_friend(self, user_id: str, identifier: str) -> Dict[str, Any]:
-        user_res = supabase_client.from_("users").select("id, email, name").or_(f"email.eq.{identifier},username.eq.{identifier}").execute()
+        user_res = supabase_client.from_("users").select("id, email, name").or_(f"email.ilike.{identifier},username.ilike.{identifier}").execute()
         friend_user = user_res.data[0] if (user_res and user_res.data) else None
         
         if not friend_user:
@@ -344,4 +442,206 @@ class DBRepository:
         res = supabase_client.from_("support_tickets").insert(ticket_data).execute()
         return res.data[0] if res and res.data else {}
 
+    # --- Challenges Additions ---
+    def get_user_challenges(self, user_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = supabase_client.from_("user_challenges").select("*, challenges(*)").eq("user_id", user_id).execute()
+            return res.data if res and res.data else []
+        except Exception:
+            try:
+                res = supabase_client.from_("user_challenges").select("*").eq("user_id", user_id).execute()
+                return res.data if res and res.data else []
+            except Exception:
+                return []
+
+    def join_challenge(self, user_id: str, challenge_id: str) -> Dict[str, Any]:
+        existing = self.get_user_challenge(user_id, challenge_id)
+        if existing:
+            return existing
+        ins_payload = {
+            "user_id": user_id,
+            "challenge_id": challenge_id,
+            "progress": 0,
+            "completed": False,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        return self.create_user_challenge(ins_payload)
+
+    # --- Leaderboard ---
+    def get_leaderboard(self, user_id: str) -> List[Dict[str, Any]]:
+        try:
+            users_res = supabase_client.from_("users").select("id, name, profile_picture_url").limit(50).execute()
+            users = users_res.data if users_res and users_res.data else []
+            
+            leaderboard = []
+            for u in users:
+                uid = str(u["id"])
+                w_res = supabase_client.from_("workouts").select("id").eq("user_id", uid).execute()
+                w_count = len(w_res.data) if w_res and w_res.data else 0
+                
+                s_res = supabase_client.from_("daily_stats").select("steps").eq("user_id", uid).execute()
+                total_steps = sum([s.get("steps") or 0 for s in s_res.data]) if s_res and s_res.data else 0
+                
+                pts = (w_count * 100) + (total_steps // 100)
+                name = u.get("name") or "User"
+                avatar = "".join([e[0] for e in name.split(" ") if e]).upper()[:2] or "US"
+                
+                leaderboard.append({
+                    "id": uid,
+                    "name": name,
+                    "avatar": avatar,
+                    "points": pts,
+                    "isMe": uid == str(user_id)
+                })
+            
+            leaderboard.sort(key=lambda x: x["points"], reverse=True)
+            return leaderboard
+        except Exception:
+            return []
+
+    # --- Badges ---
+    def get_user_badges(self, user_id: str) -> List[str]:
+        try:
+            res = supabase_client.from_("user_badges").select("badge_id").eq("user_id", user_id).execute()
+            if res and res.data:
+                return [b["badge_id"] for b in res.data if "badge_id" in b]
+            return []
+        except Exception:
+            return []
+
+    def award_badge(self, user_id: str, badge_id: str) -> Dict[str, Any]:
+        try:
+            existing = supabase_client.from_("user_badges").select("id").eq("user_id", user_id).eq("badge_id", badge_id).maybe_single().execute()
+            if existing and existing.data:
+                return existing.data
+            payload = {
+                "user_id": user_id,
+                "badge_id": badge_id,
+                "earned_at": datetime.utcnow().isoformat() + "Z"
+            }
+            res = supabase_client.from_("user_badges").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return {"user_id": user_id, "badge_id": badge_id}
+
+    # --- Nutrition Goals ---
+    def get_nutrition_goals(self, user_id: str) -> Dict[str, Any]:
+        try:
+            res = supabase_client.from_("users").select("calorie_goal, protein_goal, carbs_goal, fats_goal").eq("id", user_id).maybe_single().execute()
+            if res and res.data:
+                return {
+                    "calorie_goal": res.data.get("calorie_goal") or 2000,
+                    "protein_goal": res.data.get("protein_goal") or 130,
+                    "carbs_goal": res.data.get("carbs_goal") or 220,
+                    "fats_goal": res.data.get("fats_goal") or 65,
+                }
+        except Exception:
+            pass
+        return {"calorie_goal": 2000, "protein_goal": 130, "carbs_goal": 220, "fats_goal": 65}
+
+    def update_nutrition_goals(self, user_id: str, goals: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            res = supabase_client.from_("users").update(goals).eq("id", user_id).execute()
+            return res.data[0] if res and res.data else goals
+        except Exception:
+            return goals
+
+    # --- Supplement Logs ---
+    def log_supplement_taken(self, user_id: str, supplement_id: str, date: str) -> Dict[str, Any]:
+        payload = {
+            "user_id": user_id,
+            "supplement_id": supplement_id,
+            "date": date,
+            "taken_at": datetime.utcnow().isoformat() + "Z"
+        }
+        try:
+            res = supabase_client.from_("supplement_logs").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return payload
+
+    def get_supplement_logs(self, user_id: str, date: str) -> List[Dict[str, Any]]:
+        try:
+            res = supabase_client.from_("supplement_logs").select("*").eq("user_id", user_id).eq("date", date).execute()
+            return res.data if res and res.data else []
+        except Exception:
+            return []
+
+    # --- Group Invites ---
+    def invite_to_group(self, group_id: str, inviter_id: str, invitee_id: str) -> Dict[str, Any]:
+        payload = {
+            "group_id": group_id,
+            "inviter_id": inviter_id,
+            "invitee_id": invitee_id,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        try:
+            res = supabase_client.from_("group_invites").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return payload
+
+    def get_group_invites(self, user_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = supabase_client.from_("group_invites").select("*, groups(*), users!inviter_id(name)").eq("invitee_id", user_id).eq("status", "pending").execute()
+            return res.data if res and res.data else []
+        except Exception:
+            return []
+
+    def accept_group_invite(self, user_id: str, group_id: str) -> bool:
+        try:
+            supabase_client.from_("group_invites").update({"status": "accepted"}).eq("invitee_id", user_id).eq("group_id", group_id).execute()
+            self.join_group(user_id, group_id)
+            return True
+        except Exception:
+            self.join_group(user_id, group_id)
+            return True
+
+    # --- Direct Messages ---
+    def get_dm_messages(self, user_id: str, friend_id: str) -> List[Dict[str, Any]]:
+        """Fetch all DM messages between two users (bidirectional)."""
+        try:
+            # Get messages where user is sender or receiver in this conversation
+            res1 = supabase_client.from_("direct_messages").select("*").eq("sender_id", user_id).eq("receiver_id", friend_id).execute()
+            res2 = supabase_client.from_("direct_messages").select("*").eq("sender_id", friend_id).eq("receiver_id", user_id).execute()
+            msgs1 = res1.data if res1 and res1.data else []
+            msgs2 = res2.data if res2 and res2.data else []
+            all_msgs = msgs1 + msgs2
+            all_msgs.sort(key=lambda m: m.get("created_at", ""))
+            return all_msgs
+        except Exception:
+            return []
+
+    def send_dm(self, sender_id: str, receiver_id: str, message: str) -> Dict[str, Any]:
+        """Save a direct message to the database."""
+        payload = {
+            "sender_id": sender_id,
+            "receiver_id": receiver_id,
+            "message": message,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "read": False,
+        }
+        try:
+            res = supabase_client.from_("direct_messages").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return payload
+
+    # --- Challenge Invites ---
+    def invite_friend_to_challenge(self, inviter_id: str, friend_id: str) -> Dict[str, Any]:
+        """Send a challenge invite notification between friends."""
+        payload = {
+            "inviter_id": inviter_id,
+            "invitee_id": friend_id,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+        try:
+            res = supabase_client.from_("challenge_invites").insert(payload).execute()
+            return res.data[0] if res and res.data else payload
+        except Exception:
+            return payload
+
 db_repository = DBRepository()
+

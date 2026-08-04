@@ -47,4 +47,13 @@ class AuthService:
         except Exception as e:
             raise BadRequestException(detail=str(e))
 
+    def forgot_password(self, email: str) -> dict:
+        try:
+            supabase_client.auth.reset_password_for_email(email)
+            return {"success": True, "message": "Password reset email sent. Please check your inbox."}
+        except Exception as e:
+            # Always return success to prevent user enumeration
+            return {"success": True, "message": "If that email exists, a reset link has been sent."}
+
 auth_service = AuthService()
+

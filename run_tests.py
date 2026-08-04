@@ -30,9 +30,11 @@ def load_local_db() -> dict:
             for section in ["users", "profiles", "meals", "foodItems", "workouts", "dailyStats", 
                             "measurementLogs", "fastingLogs", "friendships", "challenges", 
                             "userChallenges", "supplements", "referrals", "groups", "groupMembers", 
-                            "groupMessages", "exports", "exportAuditLogs"]:
+                            "groupMessages", "exports", "exportAuditLogs", "directMessages",
+                            "challengeInvites", "groupInvites", "userBadges", "supplementLogs"]:
                 if section not in data:
-                    if section in ["challenges", "groups"]:
+                    if section in ["challenges", "groups", "directMessages", "challengeInvites",
+                                   "groupInvites", "userBadges", "supplementLogs"]:
                         data[section] = []
                     else:
                         data[section] = {}
@@ -155,9 +157,15 @@ class MockQueryBuilder:
             "group_messages": "groupMessages",
             "referrals": "referrals",
             "exports": "exports",
-            "export_audit_logs": "exportAuditLogs"
+            "export_audit_logs": "exportAuditLogs",
+            "direct_messages": "directMessages",
+            "challenge_invites": "challengeInvites",
+            "group_invites": "groupInvites",
+            "user_badges": "userBadges",
+            "supplement_logs": "supplementLogs",
         }
         return mapping.get(self.table, self.table)
+
 
     def select(self, fields: str = "*") -> "MockQueryBuilder":
         self.operation = "select"
@@ -548,6 +556,9 @@ def run_tests():
     res = client.post("/api/meal/analyze", files=files, headers=headers)
     is_analyze_ok = assert_status(res, 200, "POST /meal/analyze")
     
+    res = client.post("/api/nutrition/describe", json={"description": "2 eggs and toast"}, headers=headers)
+    assert_status(res, 200, "POST /nutrition/describe")
+    
     # 5. Save reviewed meal
     if is_analyze_ok:
         analysis_data = res.json().get("data") or {}
@@ -844,6 +855,82 @@ def run_tests():
     # 39. Friends list
     res = client.get("/api/friends", headers=headers)
     assert_status(res, 200, "GET /friends")
+
+    # 40. Group Join, Leave & Messaging
+    res = client.post("/api/groups", json={"name": "Test Run Group", "description": "Running group"}, headers=headers)
+    assert_status(res, 200, "POST /groups")
+    group_id = res.json()["data"]["id"]
+
+    res = client.post(f"/api/groups/{group_id}/join", headers=headers)
+    assert_status(res, 200, "POST /groups/{id}/join")
+
+    res = client.post(f"/api/groups/{group_id}/messages", json={"message": "Hello group!"}, headers=headers)
+    assert_status(res, 200, "POST /groups/{id}/messages")
+
+    res = client.get(f"/api/groups/{group_id}/messages", headers=headers)
+    assert_status(res, 200, "GET /groups/{id}/messages")
+
+    res = client.post(f"/api/groups/{group_id}/leave", headers=headers)
+    assert_status(res, 200, "POST /groups/{id}/leave")
+
+    # 41. User Challenges & Join Challenge
+    res = client.get("/api/challenges/user", headers=headers)
+    assert_status(res, 200, "GET /challenges/user")
+
+    res = client.post("/api/challenges/c123/join", headers=headers)
+    assert_status(res, 200, "POST /challenges/{id}/join")
+
+    # 42. Leaderboard API
+    res = client.get("/api/leaderboard", headers=headers)
+    assert_status(res, 200, "GET /leaderboard")
+
+    # 43. Badges API
+    res = client.get("/api/user/badges", headers=headers)
+    assert_status(res, 200, "GET /user/badges")
+
+    res = client.post("/api/user/badges", json={"badge_id": "First Log"}, headers=headers)
+    assert_status(res, 200, "POST /user/badges")
+
+    # 44. Nutrition Goals API
+    res = client.get("/api/user/nutrition-goals", headers=headers)
+    assert_status(res, 200, "GET /user/nutrition-goals")
+
+    res = client.put("/api/user/nutrition-goals", json={"calorie_goal": 2200, "protein_goal": 150, "carbs_goal": 200, "fats_goal": 70}, headers=headers)
+    assert_status(res, 200, "PUT /user/nutrition-goals")
+
+    # 45. Supplement Take Log API
+    res = client.post("/api/supplements/supp123/log?date=2026-08-03", headers=headers)
+    assert_status(res, 200, "POST /supplements/{id}/log")
+
+    res = client.get("/api/supplements/logs?date=2026-08-03", headers=headers)
+    assert_status(res, 200, "GET /supplements/logs")
+
+    # 46. Forgot Password
+    res = client.post("/api/auth/forgot-password", json={"email": "test@example.com"})
+    assert_status(res, 200, "POST /auth/forgot-password")
+    data = res.json()
+    assert data.get("success") == True, "[FAIL] forgot-password should return success"
+    print("[PASS] POST /auth/forgot-password passed.")
+
+    # 47. Direct Messages (DM)
+    # Register a second user to DM
+    res2 = client.post("/api/auth/signup", json={"email": "dmfriend@example.com", "password": "password123"})
+    friend_token = res2.json().get("token") or res2.json().get("data", {}).get("token")
+    friend_id_tmp = friend_token.replace("mock-token-", "") if friend_token else "friend123"
+
+    res = client.post(f"/api/dm/{friend_id_tmp}", json={"message": "Hey, great workout!"}, headers=headers)
+    assert_status(res, 200, "POST /dm/{friend_id}")
+
+    res = client.get(f"/api/dm/{friend_id_tmp}", headers=headers)
+    assert_status(res, 200, "GET /dm/{friend_id}")
+    data = res.json()
+    assert isinstance(data.get("data"), list), "[FAIL] DM messages should be a list"
+    print("[PASS] GET /dm/{friend_id} messages returned correctly.")
+
+    # 48. Challenge Invite
+    res = client.post(f"/api/challenges/invite/{friend_id_tmp}", headers=headers)
+    assert_status(res, 200, "POST /challenges/invite/{friend_id}")
+
 
     print("\n--- Test Results Summary ---")
     print(f"Total: {passed + failed}")
