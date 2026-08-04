@@ -18,6 +18,7 @@ async def update_profile_picture(image: UploadFile = File(...), user_id: str = D
     return await user_service.update_profile_picture(user_id, image)
 
 @router.get("/profile/history")
+@router.get("/measurements")
 def get_profile_history(user_id: str = Depends(get_current_user_id)):
     from app.services.users.profile_service import profile_service
     return profile_service.get_weight_history(user_id)
