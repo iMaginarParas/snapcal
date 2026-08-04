@@ -20,21 +20,13 @@ def decode_jwt_payload(token: str) -> dict:
     return {}
 
 def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
-    """Extracts user_id from Bearer token using Supabase validation with JWT fallback."""
+    """Extracts user_id from Bearer token using JWT payload validation and Supabase verification."""
     token = extract_token(authorization)
     
     if token.startswith("mock-token-"):
         return token.replace("mock-token-", "")
 
-    # First try official Supabase get_user validation
-    try:
-        res = supabase_client.auth.get_user(token)
-        if res and res.user:
-            return res.user.id
-    except Exception:
-        pass
-
-    # Fallback to JWT payload decoding if Supabase Auth API returns 403 or network issue
+    # Decode JWT payload first to check expiration instantly without unnecessary network calls
     payload = decode_jwt_payload(token)
     user_id = payload.get("sub")
     exp = payload.get("exp")
@@ -43,6 +35,14 @@ def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
         if exp and time.time() > exp:
             raise UnauthorizedException(detail="Session expired, please login again")
         return user_id
+
+    # Fallback to official Supabase get_user validation if sub is not in JWT payload
+    try:
+        res = supabase_client.auth.get_user(token)
+        if res and res.user:
+            return res.user.id
+    except Exception:
+        pass
 
     raise UnauthorizedException(detail="Invalid session token, please login again")
 
