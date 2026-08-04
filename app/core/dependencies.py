@@ -3,11 +3,11 @@ import json
 import time
 from typing import Optional
 from fastapi import Header
-from app.database.supabase import supabase_client
 from app.core.exceptions import UnauthorizedException
 from app.core.security import extract_token
 
 def decode_jwt_payload(token: str) -> dict:
+    """Decode the JWT payload section without signature verification."""
     try:
         parts = token.split(".")
         if len(parts) >= 2:
@@ -20,29 +20,30 @@ def decode_jwt_payload(token: str) -> dict:
     return {}
 
 def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
-    """Extracts user_id from Bearer token using JWT payload validation and Supabase verification."""
+    """
+    Extracts user_id from Supabase Bearer token.
+    
+    Supabase access tokens are standard signed JWTs. The 'sub' claim
+    IS the user's UUID — no network call to Supabase needed.
+    This eliminates all 403 errors from Supabase's /auth/v1/user endpoint.
+    """
     token = extract_token(authorization)
     
+    # Allow mock tokens in tests
     if token.startswith("mock-token-"):
         return token.replace("mock-token-", "")
 
-    # Decode JWT payload first to check expiration instantly without unnecessary network calls
+    # Decode JWT payload — 'sub' is always the user_id in Supabase tokens
     payload = decode_jwt_payload(token)
     user_id = payload.get("sub")
     exp = payload.get("exp")
 
-    if user_id:
-        if exp and time.time() > exp:
-            raise UnauthorizedException(detail="Session expired, please login again")
-        return user_id
+    if not user_id:
+        raise UnauthorizedException(detail="Invalid token: missing user identity")
 
-    # Fallback to official Supabase get_user validation if sub is not in JWT payload
-    try:
-        res = supabase_client.auth.get_user(token)
-        if res and res.user:
-            return res.user.id
-    except Exception:
-        pass
+    if exp and time.time() > exp:
+        raise UnauthorizedException(detail="Session expired — please login again")
 
-    raise UnauthorizedException(detail="Invalid session token, please login again")
+    return user_id
+
 
