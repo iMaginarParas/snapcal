@@ -58,6 +58,7 @@ class MockUser:
 class MockSession:
     def __init__(self, token: str):
         self.access_token = token
+        self.refresh_token = f"mock-refresh-token-{token}"
 
 class MockAuthResponse:
     def __init__(self, user_id: str, email: str, token: str):

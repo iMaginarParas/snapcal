@@ -33,13 +33,15 @@ class AuthService:
         try:
             res = supabase_client.auth.sign_in_with_password({"email": email, "password": password})
             if res.session:
+                token = getattr(res.session, 'access_token', None)
+                refresh_token = getattr(res.session, 'refresh_token', None)
                 return {
                     "success": True,
-                    "token": res.session.access_token,
-                    "refresh_token": res.session.refresh_token,
+                    "token": token,
+                    "refresh_token": refresh_token,
                     "data": {
-                        "token": res.session.access_token,
-                        "refresh_token": res.session.refresh_token,
+                        "token": token,
+                        "refresh_token": refresh_token,
                     }
                 }
             raise BadRequestException(detail="Invalid credentials")
@@ -53,13 +55,15 @@ class AuthService:
                 "token": payload.idToken
             })
             if res.session:
+                token = getattr(res.session, 'access_token', None)
+                refresh_token = getattr(res.session, 'refresh_token', None)
                 return {
                     "success": True,
-                    "token": res.session.access_token,
-                    "refresh_token": res.session.refresh_token,
+                    "token": token,
+                    "refresh_token": refresh_token,
                     "data": {
-                        "token": res.session.access_token,
-                        "refresh_token": res.session.refresh_token,
+                        "token": token,
+                        "refresh_token": refresh_token,
                     }
                 }
             raise BadRequestException(detail="Google authentication failed")
