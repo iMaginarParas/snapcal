@@ -333,11 +333,11 @@ class DBRepository:
     # --- Friends ---
     def get_friends(self, user_id: str) -> List[Dict[str, Any]]:
         try:
-            res = supabase_client.from_("friendships").select("id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)").eq("user_id", user_id).execute()
+            res = supabase_client.from_("friendships").select("id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)").eq("user_id", user_id).eq("status", "accepted").execute()
             data = res.data
         except Exception:
             try:
-                res = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).execute()
+                res = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).eq("status", "accepted").execute()
                 data = res.data
                 # Fetch users manually
                 for item in data:
@@ -379,11 +379,16 @@ class DBRepository:
 
     def get_friend_suggestions(self, user_id: str) -> List[Dict[str, Any]]:
         try:
-            friends_res = supabase_client.from_("friendships").select("friend_id").eq("user_id", user_id).execute()
-            friend_ids = {str(f["friend_id"]) for f in friends_res.data} if (friends_res and friends_res.data) else set()
+            friend_ids = set()
+            try:
+                friends_res = supabase_client.from_("friendships").select("friend_id").eq("user_id", user_id).execute()
+                if friends_res and friends_res.data:
+                    friend_ids = {str(f["friend_id"]) for f in friends_res.data}
+            except Exception:
+                pass
             friend_ids.add(str(user_id))
             
-            users_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").limit(20).execute()
+            users_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").limit(50).execute()
             suggestions = []
             if users_res and users_res.data:
                 for u in users_res.data:
@@ -401,8 +406,34 @@ class DBRepository:
             return []
 
     def add_friend(self, user_id: str, identifier: str) -> Dict[str, Any]:
-        user_res = supabase_client.from_("users").select("id, email, name").or_(f"email.ilike.{identifier},username.ilike.{identifier}").execute()
-        friend_user = user_res.data[0] if (user_res and user_res.data) else None
+        clean_id = identifier.strip()
+        if not clean_id:
+            raise ValueError("Invalid user search input")
+
+        friend_user = None
+        # Try PostgREST query first
+        try:
+            user_res = supabase_client.from_("users").select("id, email, name, username").or_(f"email.ilike.{clean_id},username.ilike.{clean_id},name.ilike.{clean_id}").execute()
+            if user_res and user_res.data:
+                friend_user = user_res.data[0]
+        except Exception:
+            pass
+
+        # Fallback query: scan users
+        if not friend_user:
+            try:
+                all_users = supabase_client.from_("users").select("id, email, name, username").limit(100).execute()
+                if all_users and all_users.data:
+                    q_lower = clean_id.lower()
+                    for u in all_users.data:
+                        u_email = (u.get("email") or "").lower()
+                        u_uname = (u.get("username") or "").lower()
+                        u_name = (u.get("name") or "").lower()
+                        if q_lower in u_email or q_lower in u_uname or q_lower in u_name or u_email == q_lower or u_uname == q_lower:
+                            friend_user = u
+                            break
+            except Exception:
+                pass
         
         if not friend_user:
             raise ValueError("User not found")
@@ -411,21 +442,96 @@ class DBRepository:
         if str(friend_id) == str(user_id):
             raise ValueError("Cannot add yourself as a friend")
             
-        existing = supabase_client.from_("friendships").select("id").eq("user_id", user_id).eq("friend_id", friend_id).maybe_single().execute()
-        if existing and existing.data:
-            return existing.data
+        try:
+            existing = supabase_client.from_("friendships").select("id, status").eq("user_id", user_id).eq("friend_id", friend_id).maybe_single().execute()
+            if existing and existing.data:
+                st = existing.data.get("status")
+                if st == "accepted":
+                    raise ValueError("You are already friends with this user")
+                elif st == "pending":
+                    raise ValueError("Friend request already sent")
+                
+            req_data = {"user_id": user_id, "friend_id": friend_id, "status": "pending"}
+            supabase_client.from_("friendships").upsert([req_data]).execute()
+            return {"user_id": user_id, "friend_id": friend_id, "status": "pending", "message": "Friend request sent"}
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Failed to send friend request: {e}")
+
+    def get_pending_friend_requests(self, user_id: str) -> List[Dict[str, Any]]:
+        """Returns incoming pending friend requests for the user."""
+        try:
+            res = supabase_client.from_("friendships").select("id, created_at, user_id, users!user_id(id, name, email, username, profile_picture_url)").eq("friend_id", user_id).eq("status", "pending").execute()
+            data = res.data or []
+        except Exception:
+            try:
+                res = supabase_client.from_("friendships").select("id, created_at, user_id").eq("friend_id", user_id).eq("status", "pending").execute()
+                data = res.data or []
+                for item in data:
+                    sender_id = item["user_id"]
+                    user_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").eq("id", sender_id).single().execute()
+                    item["users"] = user_res.data if user_res else {}
+            except Exception:
+                data = []
+
+        requests = []
+        for req in data:
+            sender = req.get("users") or {}
+            sender_id = req.get("user_id") or sender.get("id")
+            if not sender_id:
+                continue
+            requests.append({
+                "id": str(req.get("id")),
+                "sender_id": str(sender_id),
+                "name": sender.get("name") or "User",
+                "email": sender.get("email") or "",
+                "username": sender.get("username") or "",
+                "avatar": "".join([e[0] for e in (sender.get("name") or "FR").split(" ") if e]).upper()[:2],
+                "created_at": req.get("created_at")
+            })
+        return requests
+
+    def accept_friend_request(self, user_id: str, request_id: str) -> Dict[str, Any]:
+        """Accepts a pending friend request and creates mutual accepted friendship."""
+        try:
+            req_res = supabase_client.from_("friendships").select("id, user_id, friend_id").eq("id", request_id).eq("friend_id", user_id).single().execute()
+            if not req_res or not req_res.data:
+                raise ValueError("Friend request not found or unauthorized")
             
-        f1 = {"user_id": user_id, "friend_id": friend_id, "status": "accepted"}
-        f2 = {"user_id": friend_id, "friend_id": user_id, "status": "accepted"}
-        
-        supabase_client.from_("friendships").insert([f1, f2]).execute()
-        return f1
+            sender_id = req_res.data["user_id"]
+            
+            # Update incoming request to accepted
+            supabase_client.from_("friendships").update({"status": "accepted"}).eq("id", request_id).execute()
+            
+            # Upsert reciprocal friendship row (user_id -> sender_id)
+            reciprocal = {"user_id": user_id, "friend_id": sender_id, "status": "accepted"}
+            supabase_client.from_("friendships").upsert([reciprocal]).execute()
+            
+            return {"success": True, "message": "Friend request accepted"}
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Failed to accept friend request: {e}")
+
+    def decline_friend_request(self, user_id: str, request_id: str) -> Dict[str, Any]:
+        """Declines / deletes a pending friend request."""
+        try:
+            supabase_client.from_("friendships").delete().eq("id", request_id).eq("friend_id", user_id).execute()
+            return {"success": True, "message": "Friend request declined"}
+        except Exception as e:
+            raise ValueError(f"Failed to decline friend request: {e}")
 
     def search_users(self, query: str) -> List[Dict[str, Any]]:
+        clean_q = query.strip()
+        if not clean_q:
+            return []
+
+        # 1. Try PostgREST wildcard query
         try:
-            res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").or_(f"name.ilike.%{query}%,username.ilike.%{query}%,email.ilike.%{query}%").limit(10).execute()
-            results = []
+            res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").or_(f"name.ilike.*{clean_q}*,username.ilike.*{clean_q}*,email.ilike.*{clean_q}*").limit(10).execute()
             if res and res.data:
+                results = []
                 for u in res.data:
                     results.append({
                         "id": str(u["id"]),
@@ -434,7 +540,29 @@ class DBRepository:
                         "email": u.get("email") or "",
                         "profile_picture_url": u.get("profile_picture_url")
                     })
-            return results
+                return results
+        except Exception:
+            pass
+
+        # 2. Robust fallback filter across public.users
+        try:
+            res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").limit(100).execute()
+            results = []
+            if res and res.data:
+                q_lower = clean_q.lower()
+                for u in res.data:
+                    name = (u.get("name") or "").lower()
+                    username = (u.get("username") or "").lower()
+                    email = (u.get("email") or "").lower()
+                    if q_lower in name or q_lower in username or q_lower in email:
+                        results.append({
+                            "id": str(u["id"]),
+                            "name": u.get("name") or "User",
+                            "username": u.get("username") or "",
+                            "email": u.get("email") or "",
+                            "profile_picture_url": u.get("profile_picture_url")
+                        })
+            return results[:10]
         except Exception:
             return []
 

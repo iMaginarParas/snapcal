@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+    SUPABASE_JWT_SECRET: Optional[str] = None  # From Supabase Dashboard → Settings → API → JWT Secret
     
     # AI Config
     GEMINI_API_KEY: str = ""

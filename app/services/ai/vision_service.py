@@ -70,15 +70,16 @@ def get_random_meal_fallback() -> dict:
     ]
     return random.choice(fallbacks)
 
-# Configure Gemini API Key
-api_key = os.getenv("GEMINI_API_KEY") or ""
-is_gemini_configured = False
-if api_key and api_key != "your_gemini_api_key_here" and "placeholder" not in api_key.lower():
-    try:
-        genai.configure(api_key=api_key)
-        is_gemini_configured = True
-    except Exception as e:
-        print(f"Warning: Failed to configure Gemini client: {e}")
+# Configure Gemini API Key dynamically
+def is_gemini_active() -> bool:
+    key = os.getenv("GEMINI_API_KEY") or ""
+    if key and key != "your_gemini_api_key_here" and "placeholder" not in key.lower():
+        try:
+            genai.configure(api_key=key)
+            return True
+        except Exception as e:
+            print(f"Warning: Failed to configure Gemini client: {e}")
+    return False
 
 def preprocess_image(image_bytes: bytes) -> bytes:
     """
@@ -116,9 +117,10 @@ def analyze_meal_image_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg"
     Sends the preprocessed image to Gemini Vision to detect food items.
     """
     try:
-        if not is_gemini_configured:
-            raise ValueError("Gemini API key is not configured in .env file.")
+        if not is_gemini_active():
+            raise ValueError("Gemini API key is not configured in environment variables.")
         processed_bytes = preprocess_image(image_bytes)
+        img_obj = Image.open(io.BytesIO(processed_bytes))
         model = genai.GenerativeModel("gemini-1.5-flash")
         
         prompt = """Analyze this meal image.
@@ -155,12 +157,7 @@ Example output format:
   ]
 }
 """
-        image_part = {
-            "mime_type": "image/jpeg",
-            "data": processed_bytes
-        }
-        
-        response = model.generate_content([prompt, image_part])
+        response = model.generate_content([prompt, img_obj])
         text = response.text.strip()
         cleaned_text = text.replace("```json", "").replace("```", "").strip()
         return json.loads(cleaned_text)
@@ -171,7 +168,7 @@ Example output format:
 def generate_mock_meal_with_ai() -> dict:
     """Gets a healthy meal choice recommendation and macronutrient estimates from Gemini."""
     try:
-        if not is_gemini_configured:
+        if not is_gemini_active():
             raise ValueError("Gemini key not configured")
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = """Generate a realistic, healthy meal choice suitable for a fitness tracking application (e.g., Avocado Toast, Salmon Salad, Chicken Protein Bowl, Greek Yogurt with Berries, etc.) and estimate its nutritional values.
@@ -192,7 +189,7 @@ def generate_mock_meal_with_ai() -> dict:
 
 def analyze_meal_text_with_ai(description: str) -> dict:
     try:
-        if not is_gemini_configured:
+        if not is_gemini_active():
             raise ValueError("Gemini key not configured")
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = f"""Analyze this food description: "{description}". Provide a highly accurate estimation of:
@@ -216,9 +213,10 @@ def analyze_meal_text_with_ai(description: str) -> dict:
 
 def analyze_meal_label_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg", custom_prompt: str = None) -> dict:
     try:
-        if not is_gemini_configured:
+        if not is_gemini_active():
             raise ValueError("Gemini key not configured")
         processed_bytes = preprocess_image(image_bytes)
+        img_obj = Image.open(io.BytesIO(processed_bytes))
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = f"""Analyze this nutrition label image.{f' User notes/context: "{custom_prompt}".' if custom_prompt else ''} Extract:
         1. The product name (or a descriptive name based on the label/packaging)
@@ -226,11 +224,7 @@ def analyze_meal_label_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg"
         3. Macros: Protein (g), Carbs (g), Fats (g) per serving
         Return the response strictly as a JSON object with keys: "name" (string), "calories" (number), "protein" (number), "carbs" (number), "fats" (number). Do not include markdown formatting or additional text."""
         
-        image_part = {
-            "mime_type": "image/jpeg",
-            "data": processed_bytes
-        }
-        response = model.generate_content([prompt, image_part])
+        response = model.generate_content([prompt, img_obj])
         text = response.text.strip()
         cleaned_text = text.replace("```json", "").replace("```", "").strip()
         return json.loads(cleaned_text)
