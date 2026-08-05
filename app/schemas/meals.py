@@ -7,6 +7,7 @@ class ManualMealLogRequest(BaseModel):
     protein: Optional[float] = 0.0
     carbs: Optional[float] = 0.0
     fats: Optional[float] = 0.0
+    fat: Optional[float] = 0.0
     date: Optional[str] = None
     description: Optional[str] = None
     image_url: Optional[str] = None

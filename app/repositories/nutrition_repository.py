@@ -28,8 +28,16 @@ class NutritionRepository:
                 "id": meal.get("id"),
                 "name": meal.get("name"),
                 "calories": meal.get("total_calories") or meal.get("calories") or 0,
+                "total_calories": meal.get("total_calories") or meal.get("calories") or 0,
+                "protein": float(meal.get("protein") or 0.0),
+                "carbs": float(meal.get("carbs") or 0.0),
+                "fat": float(meal.get("fat") or meal.get("fats") or 0.0),
+                "fats": float(meal.get("fat") or meal.get("fats") or 0.0),
+                "fiber": float(meal.get("fiber") or 0.0),
                 "meal_type": meal.get("meal_type") or "Other",
-                "logged_at": meal.get("logged_at")
+                "logged_at": meal.get("logged_at"),
+                "image_url": meal.get("image_url"),
+                "food_items": meal.get("food_items") or []
             })
 
         summary["protein"] = round(summary["protein"], 1)

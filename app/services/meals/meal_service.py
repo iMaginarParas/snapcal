@@ -206,7 +206,7 @@ class MealService:
             "total_calories": payload.calories,
             "protein": payload.protein or 0.0,
             "carbs": payload.carbs or 0.0,
-            "fat": payload.fats or 0.0,
+            "fat": payload.fat or payload.fats or 0.0,
             "fiber": 0.0,
             "image_url": payload.image_url,
             "logged_at": logged_at
@@ -222,7 +222,7 @@ class MealService:
             "calories": payload.calories,
             "protein": payload.protein or 0.0,
             "carbs": payload.carbs or 0.0,
-            "fat": payload.fats or 0.0,
+            "fat": payload.fat or payload.fats or 0.0,
             "fiber": 0.0,
             "confidence": 100.0,
             "cooking_method": "cooked",

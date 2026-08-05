@@ -127,6 +127,7 @@ def save_ai_meal_legacy(payload: MealSaveRequest, user_id: str = Depends(get_cur
     return meal_service.save_ai_meal(user_id, payload)
 
 # --- Manual Logging ---
+@router.post("/meals")
 @router.post("/meal/manual")
 def log_manual_meal(payload: ManualMealLogRequest, user_id: str = Depends(get_current_user_id)):
     return meal_service.log_manual_meal(user_id, payload)
