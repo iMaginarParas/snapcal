@@ -4,6 +4,8 @@ from datetime import datetime
 
 class DBRepository:
     """Centralized database repository handling all Supabase queries."""
+    def __init__(self):
+        self._in_memory_dms = []
 
     # --- Users & Profiles ---
     def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -729,32 +731,59 @@ class DBRepository:
     # --- Direct Messages ---
     def get_dm_messages(self, user_id: str, friend_id: str) -> List[Dict[str, Any]]:
         """Fetch all DM messages between two users (bidirectional)."""
+        uid_str = str(user_id)
+        fid_str = str(friend_id)
+        db_msgs = []
         try:
-            # Get messages where user is sender or receiver in this conversation
-            res1 = supabase_client.from_("direct_messages").select("*").eq("sender_id", user_id).eq("receiver_id", friend_id).execute()
-            res2 = supabase_client.from_("direct_messages").select("*").eq("sender_id", friend_id).eq("receiver_id", user_id).execute()
+            res1 = supabase_client.from_("direct_messages").select("*").eq("sender_id", uid_str).eq("receiver_id", fid_str).execute()
+            res2 = supabase_client.from_("direct_messages").select("*").eq("sender_id", fid_str).eq("receiver_id", uid_str).execute()
             msgs1 = res1.data if res1 and res1.data else []
             msgs2 = res2.data if res2 and res2.data else []
-            all_msgs = msgs1 + msgs2
-            all_msgs.sort(key=lambda m: m.get("created_at", ""))
-            return all_msgs
+            db_msgs = msgs1 + msgs2
         except Exception:
-            return []
+            pass
+
+        # Combine with in-memory DMs
+        mem_msgs = [
+            m for m in getattr(self, "_in_memory_dms", [])
+            if (str(m.get("sender_id")) == uid_str and str(m.get("receiver_id")) == fid_str) or
+               (str(m.get("sender_id")) == fid_str and str(m.get("receiver_id")) == uid_str)
+        ]
+
+        seen_ids = set()
+        combined = []
+        for m in db_msgs + mem_msgs:
+            mid = m.get("id")
+            if mid and mid in seen_ids:
+                continue
+            if mid:
+                seen_ids.add(mid)
+            combined.append(m)
+
+        combined.sort(key=lambda m: m.get("created_at", ""))
+        return combined
 
     def send_dm(self, sender_id: str, receiver_id: str, message: str) -> Dict[str, Any]:
         """Save a direct message to the database."""
         payload = {
-            "sender_id": sender_id,
-            "receiver_id": receiver_id,
+            "id": f"dm_{int(datetime.utcnow().timestamp() * 1000)}",
+            "sender_id": str(sender_id),
+            "receiver_id": str(receiver_id),
             "message": message,
             "created_at": datetime.utcnow().isoformat() + "Z",
             "read": False,
         }
+        if not hasattr(self, "_in_memory_dms"):
+            self._in_memory_dms = []
+        self._in_memory_dms.append(payload)
+
         try:
             res = supabase_client.from_("direct_messages").insert(payload).execute()
-            return res.data[0] if res and res.data else payload
+            if res and res.data:
+                return res.data[0]
         except Exception:
-            return payload
+            pass
+        return payload
 
     # --- Challenge Invites ---
     def invite_friend_to_challenge(self, inviter_id: str, friend_id: str) -> Dict[str, Any]:
