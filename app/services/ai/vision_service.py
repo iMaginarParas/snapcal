@@ -120,9 +120,6 @@ def analyze_meal_image_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg"
         if not is_gemini_active():
             raise ValueError("Gemini API key is not configured in environment variables.")
         processed_bytes = preprocess_image(image_bytes)
-        img_obj = Image.open(io.BytesIO(processed_bytes))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        
         prompt = """Analyze this meal image.
 Identify every visible food item.
 NEVER calculate calories or macronutrients (protein, carbs, fats, fiber, sodium).
@@ -157,10 +154,32 @@ Example output format:
   ]
 }
 """
-        response = model.generate_content([prompt, img_obj])
-        text = response.text.strip()
-        cleaned_text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(cleaned_text)
+        img_obj = Image.open(io.BytesIO(processed_bytes))
+        models_to_try = ["gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+        response_text = None
+        
+        for model_name in models_to_try:
+            try:
+                model = genai.GenerativeModel(model_name)
+                res = model.generate_content([prompt, img_obj])
+                if res and res.text:
+                    response_text = res.text
+                    break
+            except Exception as model_err:
+                print(f"Vision model {model_name} failed: {model_err}")
+                continue
+
+        if not response_text:
+            raise ValueError("All Gemini vision models failed to return a response.")
+
+        cleaned_text = response_text.strip().replace("```json", "").replace("```", "").strip()
+        data = json.loads(cleaned_text)
+        
+        # Normalize 'items' to 'foods' if the model returned 'items'
+        if "foods" not in data and "items" in data:
+            data["foods"] = data["items"]
+            
+        return data
     except Exception as e:
         print(f"Gemini Vision API Warning/Fallback: {e}")
         return get_random_meal_fallback()
