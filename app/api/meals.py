@@ -29,14 +29,21 @@ async def analyze_nutrition_endpoint(
             return res
             
         meal_data = res.get("data") or {}
+        foods_list = meal_data.get("foods") or []
+        first_food_name = foods_list[0].get("food_name") or foods_list[0].get("name") if foods_list else None
+        meal_name = meal_data.get("name")
+        if not meal_name or meal_name in ["Unknown Meal", "Analyzed Meal"]:
+            meal_name = first_food_name or "Analyzed Meal"
+
         return {
             "success": True,
             "data": {
-                "name": meal_data.get("name") or "Analyzed Meal",
-                "calories": meal_data.get("total_calories") or 0,
+                "name": meal_name,
+                "calories": meal_data.get("total_calories") or meal_data.get("calories") or 0,
                 "protein": meal_data.get("protein") or 0.0,
                 "carbs": meal_data.get("carbs") or 0.0,
-                "fats": meal_data.get("fat") or 0.0
+                "fats": meal_data.get("fat") or meal_data.get("fats") or 0.0,
+                "foods": foods_list
             }
         }
     else:

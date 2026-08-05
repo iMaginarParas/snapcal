@@ -25,7 +25,11 @@ class MealService:
             # 1. AI Vision for image understanding only
             ai_response = analyze_meal_image_with_ai(image_bytes, image.content_type)
             
-            foods = ai_response.get("foods") or []
+            foods = ai_response.get("foods") or ai_response.get("items") or ai_response.get("food_items")
+            if not foods and isinstance(ai_response, dict) and "name" in ai_response:
+                foods = [ai_response]
+            if not foods:
+                foods = []
             meal_type = ai_response.get("meal_type") or "Lunch"
             image_quality = ai_response.get("image_quality") or "Good"
             
