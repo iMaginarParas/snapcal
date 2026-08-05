@@ -38,12 +38,12 @@ def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
             payload = jwt.decode(
                 token,
                 jwt_secret,
-                algorithms=["HS256", "RS256", "ES256"],
+                algorithms=["HS256"],
                 options={"verify_aud": False},
             )
         except jwt.ExpiredSignatureError:
             raise UnauthorizedException(detail="Session expired — please login again")
-        except jwt.InvalidTokenError as e:
+        except Exception as e:
             logger.warning(
                 f"JWT signature verification failed with secret ({e}); falling back to payload decode"
             )
