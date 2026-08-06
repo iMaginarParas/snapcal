@@ -16,7 +16,6 @@ class ManualMealLogRequest(BaseModel):
     @classmethod
     def normalise_fat(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            # Merge fats -> fat so service layer always reads .fat
             fats_val = float(data.get("fats") or 0.0)
             fat_val = float(data.get("fat") or 0.0)
             data["fat"] = fat_val or fats_val
@@ -25,23 +24,36 @@ class ManualMealLogRequest(BaseModel):
 
 class FoodItemSave(BaseModel):
     food_name: str
-    weight_g: float
-    calories: int
-    protein: float
-    carbs: float
-    fat: float
-    fiber: float
-    confidence: float
+    weight_g: float = 100.0
+    calories: int = 0
+    protein: float = 0.0
+    carbs: float = 0.0
+    fat: float = 0.0
+    fiber: float = 0.0
+    confidence: float = 85.0
     cooking_method: Optional[str] = "cooked"
     ingredients: Optional[List[str]] = []
     hidden_ingredients: Optional[List[str]] = []
     serving: Optional[str] = "1 serving"
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_food_item(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("food_name"):
+                data["food_name"] = data.get("name") or "Food Item"
+            fats_val = float(data.get("fats") or 0.0)
+            fat_val = float(data.get("fat") or 0.0)
+            data["fat"] = fat_val or fats_val
+            cal = data.get("calories") or data.get("total_calories") or 0
+            data["calories"] = int(cal)
+        return data
+
 class MealSaveRequest(BaseModel):
-    name: str
+    name: str = "Meal Log"
     meal_type: Optional[str] = "Lunch"
     total_weight: Optional[float] = 0.0
-    total_calories: int
+    total_calories: int = 0
     protein: float = 0.0
     carbs: float = 0.0
     fat: float = 0.0
@@ -49,6 +61,17 @@ class MealSaveRequest(BaseModel):
     image_url: Optional[str] = None
     date: Optional[str] = None  # YYYY-MM-DD
     foods: List[FoodItemSave] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_meal_save(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            fats_val = float(data.get("fats") or 0.0)
+            fat_val = float(data.get("fat") or 0.0)
+            data["fat"] = fat_val or fats_val
+            cal = data.get("total_calories") or data.get("calories") or 0
+            data["total_calories"] = int(cal)
+        return data
 
 class FoodCorrectionSave(BaseModel):
     original_name: str

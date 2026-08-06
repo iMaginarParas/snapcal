@@ -2,6 +2,168 @@
 # Keys are normalized lowercase names for lookup.
 
 NUTRITION_DB = {
+    "banana": {
+        "calories": 89,
+        "protein": 1.1,
+        "carbs": 22.8,
+        "fat": 0.3,
+        "fiber": 2.6,
+        "sodium": 1,
+        "serving_size_g": 118
+    },
+    "apple": {
+        "calories": 52,
+        "protein": 0.3,
+        "carbs": 13.8,
+        "fat": 0.2,
+        "fiber": 2.4,
+        "sodium": 1,
+        "serving_size_g": 150
+    },
+    "orange": {
+        "calories": 47,
+        "protein": 0.9,
+        "carbs": 11.8,
+        "fat": 0.1,
+        "fiber": 2.4,
+        "sodium": 0,
+        "serving_size_g": 130
+    },
+    "mango": {
+        "calories": 60,
+        "protein": 0.8,
+        "carbs": 15.0,
+        "fat": 0.4,
+        "fiber": 1.6,
+        "sodium": 1,
+        "serving_size_g": 200
+    },
+    "egg": {
+        "calories": 155,
+        "protein": 13.0,
+        "carbs": 1.1,
+        "fat": 11.0,
+        "fiber": 0.0,
+        "sodium": 124,
+        "serving_size_g": 50
+    },
+    "boiled egg": {
+        "calories": 155,
+        "protein": 13.0,
+        "carbs": 1.1,
+        "fat": 11.0,
+        "fiber": 0.0,
+        "sodium": 124,
+        "serving_size_g": 50
+    },
+    "omelette": {
+        "calories": 180,
+        "protein": 11.0,
+        "carbs": 1.5,
+        "fat": 14.0,
+        "fiber": 0.0,
+        "sodium": 220,
+        "serving_size_g": 100
+    },
+    "bread": {
+        "calories": 265,
+        "protein": 9.0,
+        "carbs": 49.0,
+        "fat": 3.2,
+        "fiber": 2.7,
+        "sodium": 490,
+        "serving_size_g": 40
+    },
+    "toast": {
+        "calories": 270,
+        "protein": 9.5,
+        "carbs": 50.0,
+        "fat": 3.5,
+        "fiber": 2.8,
+        "sodium": 500,
+        "serving_size_g": 40
+    },
+    "avocado": {
+        "calories": 160,
+        "protein": 2.0,
+        "carbs": 8.5,
+        "fat": 14.7,
+        "fiber": 6.7,
+        "sodium": 7,
+        "serving_size_g": 100
+    },
+    "avocado toast": {
+        "calories": 210,
+        "protein": 6.5,
+        "carbs": 24.0,
+        "fat": 10.5,
+        "fiber": 4.5,
+        "sodium": 310,
+        "serving_size_g": 150
+    },
+    "milk": {
+        "calories": 62,
+        "protein": 3.2,
+        "carbs": 4.8,
+        "fat": 3.3,
+        "fiber": 0.0,
+        "sodium": 43,
+        "serving_size_g": 240
+    },
+    "oats": {
+        "calories": 389,
+        "protein": 16.9,
+        "carbs": 66.3,
+        "fat": 6.9,
+        "fiber": 10.6,
+        "sodium": 2,
+        "serving_size_g": 50
+    },
+    "chicken": {
+        "calories": 165,
+        "protein": 31.0,
+        "carbs": 0.0,
+        "fat": 3.6,
+        "fiber": 0.0,
+        "sodium": 74,
+        "serving_size_g": 150
+    },
+    "chicken breast": {
+        "calories": 165,
+        "protein": 31.0,
+        "carbs": 0.0,
+        "fat": 3.6,
+        "fiber": 0.0,
+        "sodium": 74,
+        "serving_size_g": 150
+    },
+    "grilled chicken": {
+        "calories": 185,
+        "protein": 29.0,
+        "carbs": 0.0,
+        "fat": 6.5,
+        "fiber": 0.0,
+        "sodium": 210,
+        "serving_size_g": 150
+    },
+    "salad": {
+        "calories": 35,
+        "protein": 1.5,
+        "carbs": 6.0,
+        "fat": 0.5,
+        "fiber": 2.5,
+        "sodium": 40,
+        "serving_size_g": 150
+    },
+    "fruit": {
+        "calories": 60,
+        "protein": 0.8,
+        "carbs": 15.0,
+        "fat": 0.3,
+        "fiber": 2.0,
+        "sodium": 2,
+        "serving_size_g": 150
+    },
     "chicken biryani": {
         "calories": 163,
         "protein": 8.5,
