@@ -53,6 +53,8 @@ class ProfileService:
             
         # Merge names and username from core user table for completeness
         result = dict(profile)
+        result["user_id"] = user_id
+        result["id"] = user_id
         result["name"] = core_user.get("name") or "Guest User"
         result["username"] = core_user.get("username") or user_id
         result["profile_picture_url"] = core_user.get("profile_picture_url")
