@@ -1,22 +1,43 @@
-from supabase import create_client, Client
-from app.core.config import settings
+import logging
 from app.core.logging import logger
 
-def get_supabase_client() -> Client:
-    if not settings.SUPABASE_URL or not settings.supabase_key:
-        raise ValueError("Critical Configuration Error: SUPABASE_URL and SUPABASE_ANON_KEY must be configured in environment variables.")
-        
-    if "your_supabase" in settings.SUPABASE_URL or "your_supabase" in settings.supabase_key:
-        raise ValueError("Critical Configuration Error: Default placeholder Supabase credentials detected. Please configure real database credentials in your .env file.")
-        
-    try:
-        return create_client(settings.SUPABASE_URL, settings.supabase_key)
-    except Exception as e:
-        logger.error(f"Failed to initialize Supabase client: {e}")
-        raise e
+_supabase_client = None
+_supabase_available = False
 
-# Exported live client instance
-supabase_client: Client = get_supabase_client()
+
+def _init_supabase():
+    global _supabase_client, _supabase_available
+    try:
+        from supabase import create_client
+        from app.core.config import settings
+
+        url = settings.SUPABASE_URL or ""
+        key = settings.supabase_key or ""
+
+        if (
+            not url or not key
+            or "your_supabase" in url
+            or "your_supabase" in key
+        ):
+            logger.warning(
+                "Supabase credentials not configured. "
+                "Meals will be stored in local file fallback. "
+                "Set SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env to enable cloud persistence."
+            )
+            return None
+
+        client = create_client(url, key)
+        _supabase_available = True
+        logger.info("Supabase client initialized successfully.")
+        return client
+    except Exception as e:
+        logger.error(f"Supabase initialization failed: {e}")
+        return None
+
+
+# Lazy singleton — does NOT crash server on import
+supabase_client = _init_supabase()
+
 
 def is_supabase_live() -> bool:
-    return supabase_client is not None
+    return _supabase_available and supabase_client is not None
