@@ -96,9 +96,12 @@ class MealService:
                 total_weight += weight
 
             # Construct dynamic meal summary name
-            meal_name = calculated_foods[0]["normalized_name"] if calculated_foods else "Unknown Meal"
+            first_name = (calculated_foods[0].get("food_name") or calculated_foods[0].get("normalized_name") or "Food Log") if calculated_foods else "Food Log"
+            meal_name = first_name
             if len(calculated_foods) > 1:
-                meal_name += f" with {calculated_foods[1]['normalized_name']}"
+                second_name = calculated_foods[1].get("food_name") or calculated_foods[1].get("normalized_name")
+                if second_name:
+                    meal_name += f" with {second_name}"
                 if len(calculated_foods) > 2:
                     meal_name += f" and {len(calculated_foods)-2} more"
 

@@ -20,6 +20,11 @@ class ManualMealLogRequest(BaseModel):
             fat_val = float(data.get("fat") or 0.0)
             data["fat"] = fat_val or fats_val
             data["fats"] = data["fat"]
+
+            name = (data.get("name") or "").strip()
+            desc = (data.get("description") or "").strip()
+            if (not name or name.lower() in ["meal log", "analyzed meal", "unknown meal"]) and desc:
+                data["name"] = desc.split(",")[0].capitalize()
         return data
 
 class FoodItemSave(BaseModel):
@@ -71,6 +76,15 @@ class MealSaveRequest(BaseModel):
             data["fat"] = fat_val or fats_val
             cal = data.get("total_calories") or data.get("calories") or 0
             data["total_calories"] = int(cal)
+
+            name = (data.get("name") or "").strip()
+            foods = data.get("foods") or []
+            if (not name or name.lower() in ["meal log", "analyzed meal", "unknown meal", "food log"]) and foods:
+                first = foods[0]
+                if isinstance(first, dict):
+                    fn = first.get("food_name") or first.get("name")
+                    if fn:
+                        data["name"] = fn
         return data
 
 class FoodCorrectionSave(BaseModel):
