@@ -64,15 +64,31 @@ class DBRepository:
 
     # --- Daily Stats ---
     def get_daily_stats(self, user_id: str, date_str: str) -> Optional[Dict[str, Any]]:
-        res = supabase_client.from_("daily_stats").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
-        return res.data if res else None
+        try:
+            if not supabase_client:
+                return None
+            res = supabase_client.from_("daily_stats").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
+            return res.data if res else None
+        except Exception:
+            return None
 
     def create_daily_stats(self, stats: Dict[str, Any]) -> Dict[str, Any]:
-        res = supabase_client.from_("daily_stats").insert(stats).execute()
-        return res.data[0] if res and res.data else {}
+        try:
+            if not supabase_client:
+                return stats
+            res = supabase_client.from_("daily_stats").insert(stats).execute()
+            return res.data[0] if res and res.data else stats
+        except Exception:
+            return stats
 
     def update_daily_stats(self, user_id: str, date_str: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-        res = supabase_client.from_("daily_stats").update(updates).eq("user_id", user_id).eq("date", date_str).execute()
+        try:
+            if not supabase_client:
+                return updates
+            res = supabase_client.from_("daily_stats").update(updates).eq("user_id", user_id).eq("date", date_str).execute()
+            return res.data[0] if res and res.data else updates
+        except Exception:
+            return updates
         return res.data[0] if res and res.data else {}
 
     # --- Measurements ---

@@ -116,12 +116,12 @@ class FoodNormalizer:
         # 5. Fuzzy Match against all foods registered in database
         # Fetch standard list of foods for matching
         standard_foods = []
-        if is_supabase_live():
-            try:
-                res = food_repository.search_foods("", limit=100)
-                standard_foods = [f["name"] for f in res]
-            except Exception:
-                pass
+        try:
+            res = food_repository.search_foods("", limit=100)
+            if res:
+                standard_foods = [f["name"] for f in res if isinstance(f, dict) and "name" in f]
+        except Exception:
+            pass
 
         if not standard_foods:
             # Fallback list of standard names
