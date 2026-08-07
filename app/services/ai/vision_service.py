@@ -157,7 +157,7 @@ Example output format:
 }
 """
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash-8b", "gemini-2.0-flash"]
         response_text = None
         last_error = None
 
