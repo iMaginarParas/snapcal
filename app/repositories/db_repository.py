@@ -332,6 +332,33 @@ class DBRepository:
         
         return True
 
+    # --- Friends Helpers ---
+    @staticmethod
+    def _resolve_display_name(name: Optional[str] = None, username: Optional[str] = None, email: Optional[str] = None) -> str:
+        n = (name or "").strip()
+        u = (username or "").strip()
+        e = (email or "").strip()
+        
+        if n and n.lower() not in ["user", "friend user", "user user", "none", "null"]:
+            return n
+        if u and u.lower() not in ["user", "none", "null"]:
+            return u
+        if e and "@" in e:
+            prefix = e.split("@")[0]
+            if prefix and prefix.lower() not in ["user", "none", "null"]:
+                return prefix
+        return n or u or "User"
+
+    @staticmethod
+    def _get_avatar_initials(display_name: str) -> str:
+        cleaned = (display_name or "").strip()
+        if not cleaned:
+            return "U"
+        parts = [p for p in cleaned.split(" ") if p]
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[1][0]).upper()
+        return cleaned[:2].upper()
+
     # --- Friends ---
     def get_friends(self, user_id: str) -> List[Dict[str, Any]]:
         try:
@@ -366,15 +393,24 @@ class DBRepository:
                         steps = stats_res.data.get("steps") or 0
                 except Exception:
                     pass
+
+                disp_name = self._resolve_display_name(
+                    friend_user.get("name"), 
+                    friend_user.get("username"), 
+                    friend_user.get("email")
+                )
+                avatar_inits = self._get_avatar_initials(disp_name)
                     
                 result.append({
                     "id": str(f.get("id")),
                     "friend_id": str(fid),
-                    "name": friend_user.get("name") or "Friend User",
+                    "name": disp_name,
+                    "username": friend_user.get("username") or "",
                     "email": friend_user.get("email") or "",
+                    "profile_picture_url": friend_user.get("profile_picture_url"),
                     "steps": steps,
                     "calories": int(steps * 0.045),
-                    "avatar": "".join([e[0] for e in (friend_user.get("name") or "FR").split(" ") if e]).upper()[:2],
+                    "avatar": avatar_inits,
                     "status": "Active"
                 })
         return result
@@ -396,9 +432,10 @@ class DBRepository:
                 for u in users_res.data:
                     uid_str = str(u["id"])
                     if uid_str not in friend_ids:
+                        disp_name = self._resolve_display_name(u.get("name"), u.get("username"), u.get("email"))
                         suggestions.append({
                             "id": uid_str,
-                            "name": u.get("name") or "User",
+                            "name": disp_name,
                             "username": u.get("username") or "",
                             "email": u.get("email") or "",
                             "profile_picture_url": u.get("profile_picture_url")
@@ -483,13 +520,15 @@ class DBRepository:
             sender_id = req.get("user_id") or sender.get("id")
             if not sender_id:
                 continue
+            disp_name = self._resolve_display_name(sender.get("name"), sender.get("username"), sender.get("email"))
             requests.append({
                 "id": str(req.get("id")),
                 "sender_id": str(sender_id),
-                "name": sender.get("name") or "User",
+                "name": disp_name,
                 "email": sender.get("email") or "",
                 "username": sender.get("username") or "",
-                "avatar": "".join([e[0] for e in (sender.get("name") or "FR").split(" ") if e]).upper()[:2],
+                "profile_picture_url": sender.get("profile_picture_url"),
+                "avatar": self._get_avatar_initials(disp_name),
                 "created_at": req.get("created_at")
             })
         return requests
@@ -537,7 +576,7 @@ class DBRepository:
                 for u in res.data:
                     results.append({
                         "id": str(u["id"]),
-                        "name": u.get("name") or "User",
+                        "name": self._resolve_display_name(u.get("name"), u.get("username"), u.get("email")),
                         "username": u.get("username") or "",
                         "email": u.get("email") or "",
                         "profile_picture_url": u.get("profile_picture_url")
@@ -559,7 +598,7 @@ class DBRepository:
                     if q_lower in name or q_lower in username or q_lower in email:
                         results.append({
                             "id": str(u["id"]),
-                            "name": u.get("name") or "User",
+                            "name": self._resolve_display_name(u.get("name"), u.get("username"), u.get("email")),
                             "username": u.get("username") or "",
                             "email": u.get("email") or "",
                             "profile_picture_url": u.get("profile_picture_url")
