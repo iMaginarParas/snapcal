@@ -35,11 +35,31 @@ class AuthService:
                 }
             raise BadRequestException(detail="Signup failed. Please try again.")
         except Exception as e:
+            # Fallback: If signup failed (e.g. user already exists or 429 rate limit hit), attempt direct sign-in
+            try:
+                login_res = supabase_client.auth.sign_in_with_password({"email": email, "password": password})
+                if login_res and getattr(login_res, 'session', None):
+                    token = getattr(login_res.session, 'access_token', None)
+                    refresh_token = getattr(login_res.session, 'refresh_token', None)
+                    user_obj = getattr(login_res, 'user', None)
+                    return {
+                        "success": True,
+                        "token": token,
+                        "refresh_token": refresh_token,
+                        "data": {
+                            "token": token,
+                            "refresh_token": refresh_token,
+                            "user": {"email": user_obj.email, "id": user_obj.id} if user_obj else {}
+                        }
+                    }
+            except Exception:
+                pass
+
             err_msg = str(e)
-            if "User already registered" in err_msg or "already exists" in err_msg.lower():
-                err_msg = "User already registered. Please sign in instead."
-            elif "Email rate limit exceeded" in err_msg:
-                err_msg = "Rate limit exceeded. Please wait a minute and try again."
+            if "429" in err_msg or "rate limit" in err_msg.lower() or "too many requests" in err_msg.lower():
+                err_msg = "Supabase sign-up rate limit reached. Please sign in with your password or wait a few minutes."
+            elif "User already registered" in err_msg or "already exists" in err_msg.lower():
+                err_msg = "Account already exists. Please sign in with your password."
             raise BadRequestException(detail=err_msg)
 
     def login(self, payload: LoginRequest) -> dict:
