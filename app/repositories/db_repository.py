@@ -855,5 +855,106 @@ class DBRepository:
         except Exception:
             return payload
 
+    # --- Group Members Helper ---
+    def get_group_members(self, group_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = supabase_client.from_("group_members").select("user_id, joined_at, users(id, name, username, email, profile_picture_url)").eq("group_id", group_id).execute()
+            data = res.data if res and res.data else []
+        except Exception:
+            try:
+                res = supabase_client.from_("group_members").select("user_id, joined_at").eq("group_id", group_id).execute()
+                data = res.data if res and res.data else []
+                for item in data:
+                    uid = item["user_id"]
+                    user_res = supabase_client.from_("users").select("id, name, username, email, profile_picture_url").eq("id", uid).single().execute()
+                    item["users"] = user_res.data if user_res else {}
+            except Exception:
+                data = []
+
+        result = []
+        for m in data:
+            u = m.get("users") or {}
+            uid = m.get("user_id") or u.get("id")
+            disp_name = self._resolve_display_name(u.get("name"), u.get("username"), u.get("email"))
+            today_str = datetime.utcnow().isoformat().split("T")[0]
+            steps = 0
+            try:
+                stats_res = supabase_client.from_("daily_stats").select("steps").eq("user_id", str(uid)).eq("date", today_str).maybe_single().execute()
+                if stats_res and stats_res.data:
+                    steps = stats_res.data.get("steps") or 0
+            except Exception:
+                pass
+            result.append({
+                "user_id": str(uid),
+                "name": disp_name,
+                "profile_picture_url": u.get("profile_picture_url"),
+                "avatar": self._get_avatar_initials(disp_name),
+                "steps": steps,
+                "calories": int(steps * 0.045),
+                "workouts": max(int(steps / 4000) + 1, 1),
+                "joined_at": m.get("joined_at")
+            })
+        return result
+
+    # --- Notifications ---
+    def create_notification(self, user_id: str, sender_id: str, title: str, body: str, notif_type: str, extra_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        notif_id = f"notif_{int(datetime.utcnow().timestamp() * 1000)}"
+        payload = {
+            "id": notif_id,
+            "user_id": str(user_id),
+            "sender_id": str(sender_id),
+            "title": title,
+            "body": body,
+            "type": notif_type,
+            "data": extra_data or {},
+            "is_read": False,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        if not hasattr(self, "_in_memory_notifications"):
+            self._in_memory_notifications = []
+        self._in_memory_notifications.append(payload)
+
+        try:
+            res = supabase_client.from_("notifications").insert(payload).execute()
+            if res and res.data:
+                return res.data[0]
+        except Exception:
+            pass
+        return payload
+
+    def get_notifications(self, user_id: str, limit: int = 30) -> List[Dict[str, Any]]:
+        uid_str = str(user_id)
+        try:
+            res = supabase_client.from_("notifications").select("*").eq("user_id", uid_str).order("created_at", desc=True).limit(limit).execute()
+            db_notifs = res.data if res and res.data else []
+        except Exception:
+            db_notifs = []
+
+        mem_notifs = [
+            n for n in getattr(self, "_in_memory_notifications", [])
+            if str(n.get("user_id")) == uid_str
+        ]
+        
+        seen_ids = set()
+        combined = []
+        for n in db_notifs + mem_notifs:
+            nid = n.get("id")
+            if nid and nid in seen_ids:
+                continue
+            if nid:
+                seen_ids.add(nid)
+            combined.append(n)
+        return combined
+
+    def mark_notification_read(self, user_id: str, notification_id: str) -> bool:
+        try:
+            supabase_client.from_("notifications").update({"is_read": True}).eq("id", notification_id).eq("user_id", str(user_id)).execute()
+        except Exception:
+            pass
+        for n in getattr(self, "_in_memory_notifications", []):
+            if str(n.get("id")) == str(notification_id) and str(n.get("user_id")) == str(user_id):
+                n["is_read"] = True
+        return True
+
 db_repository = DBRepository()
 
