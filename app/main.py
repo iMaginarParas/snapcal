@@ -46,6 +46,18 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+@app.get("/.well-known/assetlinks.json")
+def serve_assetlinks():
+    return [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.sabtrack.ai",
+            "sha256_cert_fingerprints": []
+        }
+    }]
+
+
 @app.get("/delete-account", response_class=HTMLResponse)
 @app.get("/delete-account.html", response_class=HTMLResponse)
 def serve_delete_account_page():

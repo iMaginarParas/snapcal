@@ -29,11 +29,17 @@ async def analyze_nutrition_endpoint(
         except Exception as e:
             error_msg = str(e)
             print(f"[MealsAPI] analyze_nutrition_endpoint failed: {error_msg}")
-            # Surface a clear, user-facing message — do NOT return fake nutrition data
+            
+            # If the failure is due to invalid API key, missing env var, quota, or rate limit
+            is_api_config_issue = any(k in error_msg.lower() for k in ["api key", "apikey", "quota", "credential", "invalid", "400", "403", "429", "unauthorized", "gemini"])
+            
+            user_error = f"Gemini AI Service Error: {error_msg}" if is_api_config_issue else "Could not identify food items in this photo. Please try again with a clearer, well-lit image."
+            error_code = "API_KEY_ERROR" if is_api_config_issue else "ANALYSIS_FAILED"
+
             return {
                 "success": False,
-                "error": "Could not analyze the food photo. Please try again with a clearer image.",
-                "error_code": "ANALYSIS_FAILED",
+                "error": user_error,
+                "error_code": error_code,
                 "detail": error_msg
             }
 
