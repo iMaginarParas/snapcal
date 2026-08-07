@@ -19,25 +19,60 @@ class NutritionRepository:
         }
 
         for meal in meals:
-            summary["calories"] += int(meal.get("total_calories") or meal.get("calories") or 0)
-            summary["protein"] += float(meal.get("protein") or 0.0)
-            summary["carbs"] += float(meal.get("carbs") or 0.0)
-            summary["fat"] += float(meal.get("fat") or meal.get("fats") or 0.0)
-            summary["fiber"] += float(meal.get("fiber") or 0.0)
+            food_items = meal.get("food_items") or []
+
+            m_calories = int(meal.get("total_calories") or meal.get("calories") or 0)
+            m_protein = float(meal.get("protein") or 0.0)
+            m_carbs = float(meal.get("carbs") or 0.0)
+            m_fat = float(meal.get("fat") or meal.get("fats") or 0.0)
+            m_fiber = float(meal.get("fiber") or 0.0)
+            m_name = (meal.get("name") or "").strip()
+
+            # Fallback to food_items if parent totals are 0 or empty
+            if (m_calories == 0 or m_protein == 0.0) and food_items:
+                fi_cal = sum(int(fi.get("calories") or 0) for fi in food_items)
+                fi_prot = sum(float(fi.get("protein") or 0.0) for fi in food_items)
+                fi_carbs = sum(float(fi.get("carbs") or 0.0) for fi in food_items)
+                fi_fat = sum(float(fi.get("fat") or fi.get("fats") or 0.0) for fi in food_items)
+                fi_fiber = sum(float(fi.get("fiber") or 0.0) for fi in food_items)
+                
+                if fi_cal > 0:
+                    m_calories = fi_cal
+                if fi_prot > 0:
+                    m_protein = fi_prot
+                if fi_carbs > 0:
+                    m_carbs = fi_carbs
+                if fi_fat > 0:
+                    m_fat = fi_fat
+                if fi_fiber > 0:
+                    m_fiber = fi_fiber
+
+            if not m_name or m_name.lower() in ["meal log", "analyzed meal", "unknown meal", "analyzed food"]:
+                if food_items:
+                    first_fn = food_items[0].get("food_name") or food_items[0].get("normalized_name") or food_items[0].get("name")
+                    if first_fn:
+                        m_name = first_fn
+
+            summary["calories"] += m_calories
+            summary["protein"] += m_protein
+            summary["carbs"] += m_carbs
+            summary["fat"] += m_fat
+            summary["fiber"] += m_fiber
+
             summary["meals"].append({
                 "id": meal.get("id"),
-                "name": meal.get("name"),
-                "calories": meal.get("total_calories") or meal.get("calories") or 0,
-                "total_calories": meal.get("total_calories") or meal.get("calories") or 0,
-                "protein": float(meal.get("protein") or 0.0),
-                "carbs": float(meal.get("carbs") or 0.0),
-                "fat": float(meal.get("fat") or meal.get("fats") or 0.0),
-                "fats": float(meal.get("fat") or meal.get("fats") or 0.0),
-                "fiber": float(meal.get("fiber") or 0.0),
+                "name": m_name or "Meal Log",
+                "calories": m_calories,
+                "total_calories": m_calories,
+                "protein": round(m_protein, 1),
+                "carbs": round(m_carbs, 1),
+                "fat": round(m_fat, 1),
+                "fats": round(m_fat, 1),
+                "fiber": round(m_fiber, 1),
                 "meal_type": meal.get("meal_type") or "Other",
                 "logged_at": meal.get("logged_at"),
                 "image_url": meal.get("image_url"),
-                "food_items": meal.get("food_items") or []
+                "food_items": food_items
             })
 
         summary["protein"] = round(summary["protein"], 1)
