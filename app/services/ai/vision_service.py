@@ -78,7 +78,9 @@ def is_gemini_active() -> bool:
             genai.configure(api_key=key)
             return True
         except Exception as e:
-            print(f"Warning: Failed to configure Gemini client: {e}")
+            print(f"[VisionService] WARNING: Failed to configure Gemini client: {e}")
+    else:
+        print(f"[VisionService] ERROR: GEMINI_API_KEY is missing or a placeholder. AI photo analysis will NOT work.")
     return False
 
 def preprocess_image(image_bytes: bytes) -> bytes:
@@ -155,34 +157,43 @@ Example output format:
 }
 """
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         response_text = None
-        
+        last_error = None
+
         for model_name in models_to_try:
             try:
                 model = genai.GenerativeModel(model_name)
                 res = model.generate_content([prompt, img_obj])
                 if res and res.text:
                     response_text = res.text
+                    print(f"[VisionService] Model '{model_name}' succeeded.")
                     break
             except Exception as model_err:
-                print(f"Vision model {model_name} failed: {model_err}")
+                last_error = model_err
+                print(f"[VisionService] Model '{model_name}' failed: {model_err}")
                 continue
 
         if not response_text:
-            raise ValueError("All Gemini vision models failed to return a response.")
+            raise ValueError(
+                f"All Gemini vision models failed. Last error: {last_error}. "
+                "Check GEMINI_API_KEY and API quota in Railway environment variables."
+            )
 
         cleaned_text = response_text.strip().replace("```json", "").replace("```", "").strip()
         data = json.loads(cleaned_text)
-        
+
         # Normalize 'items' to 'foods' if the model returned 'items'
         if "foods" not in data and "items" in data:
             data["foods"] = data["items"]
-            
+
+        foods = data.get("foods") or []
+        print(f"[VisionService] Detected {len(foods)} food item(s) in image.")
         return data
     except Exception as e:
-        print(f"Gemini Vision API Warning/Fallback: {e}")
-        return get_random_meal_fallback()
+        # Do NOT silently fall back to fake food data — raise so the caller can return a real error
+        print(f"[VisionService] FATAL: Food photo analysis failed: {e}")
+        raise ValueError(f"Food photo analysis failed: {str(e)}")
 
 def generate_mock_meal_with_ai() -> dict:
     """Gets a healthy meal choice recommendation and macronutrient estimates from Gemini."""

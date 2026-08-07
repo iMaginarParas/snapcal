@@ -95,6 +95,17 @@ class MealService:
                 total_fiber += nutri["fiber"]
                 total_weight += weight
 
+            print(f"[MealService] Nutrition resolved: {len(calculated_foods)} foods | {total_calories} kcal total")
+
+            # Guard: if all foods resolved to 0 calories, something went wrong \u2014 raise instead of silently returning 0 kcal
+            if total_calories == 0 and calculated_foods:
+                raise BadRequestException(
+                    detail=(
+                        "Nutrition data could not be resolved for the detected food items. "
+                        "Please try again with a clearer image or better lighting."
+                    )
+                )
+
             # Construct dynamic meal summary name
             first_name = (calculated_foods[0].get("food_name") or calculated_foods[0].get("normalized_name") or "Food Log") if calculated_foods else "Food Log"
             meal_name = first_name

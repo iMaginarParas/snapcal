@@ -22,12 +22,24 @@ async def analyze_nutrition_endpoint(
         form = await request.form()
         image = form.get("image")
         if not image or not isinstance(image, UploadFile):
-            return {"success": False, "error": "Image file is required"}
-            
-        res = await meal_service.analyze_meal_image(user_id, image)
+            return {"success": False, "error": "Image file is required", "error_code": "MISSING_IMAGE"}
+
+        try:
+            res = await meal_service.analyze_meal_image(user_id, image)
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[MealsAPI] analyze_nutrition_endpoint failed: {error_msg}")
+            # Surface a clear, user-facing message — do NOT return fake nutrition data
+            return {
+                "success": False,
+                "error": "Could not analyze the food photo. Please try again with a clearer image.",
+                "error_code": "ANALYSIS_FAILED",
+                "detail": error_msg
+            }
+
         if not res.get("success"):
             return res
-            
+
         meal_data = res.get("data") or {}
         foods_list = meal_data.get("foods") or []
         first_food_name = foods_list[0].get("food_name") or foods_list[0].get("normalized_name") or foods_list[0].get("name") if foods_list else None
@@ -38,13 +50,15 @@ async def analyze_nutrition_endpoint(
         m_cal = int(meal_data.get("total_calories") or meal_data.get("calories") or 0)
         m_prot = float(meal_data.get("protein") or 0.0)
         m_carbs = float(meal_data.get("carbs") or 0.0)
-        m_fats = float(meal_data.get("fat") or meal.get("fats") or 0.0)
+        m_fats = float(meal_data.get("fat") or meal_data.get("fats") or 0.0)  # Fixed: was `meal.get` (NameError)
 
         if (m_cal == 0 or m_prot == 0.0) and foods_list:
             m_cal = sum(int(f.get("calories") or 0) for f in foods_list)
             m_prot = sum(float(f.get("protein") or 0.0) for f in foods_list)
             m_carbs = sum(float(f.get("carbs") or 0.0) for f in foods_list)
             m_fats = sum(float(f.get("fat") or f.get("fats") or 0.0) for f in foods_list)
+
+        print(f"[MealsAPI] Analysis complete: {meal_name} | {m_cal} kcal | P:{m_prot}g C:{m_carbs}g F:{m_fats}g")
 
         return {
             "success": True,
@@ -58,22 +72,11 @@ async def analyze_nutrition_endpoint(
             }
         }
     else:
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-            
-        from app.services.ai.vision_service import get_random_meal_fallback
-        fallback = get_random_meal_fallback()
+        # Non-multipart request to an image-only endpoint — return a clear error
         return {
-            "success": True,
-            "data": {
-                "name": fallback.get("name") or "Avocado Toast with Poached Eggs",
-                "calories": fallback.get("calories") or 380,
-                "protein": fallback.get("protein") or 16.0,
-                "carbs": fallback.get("carbs") or 32.0,
-                "fats": fallback.get("fats") or 20.0
-            }
+            "success": False,
+            "error": "This endpoint requires a multipart/form-data image upload.",
+            "error_code": "INVALID_REQUEST"
         }
 
 @router.post("/nutrition/analyze-text")
