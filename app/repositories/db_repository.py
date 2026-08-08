@@ -151,6 +151,7 @@ class DBRepository:
         except Exception:
             groups = []
 
+        visible_groups = []
         for g in groups:
             gid = str(g.get("id"))
             try:
@@ -172,7 +173,25 @@ class DBRepository:
                 if isinstance(u, dict) and u.get("profile_picture_url"):
                     avatars.append(u["profile_picture_url"])
             g["avatars"] = avatars
-        return groups
+
+            is_pub = g.get("is_public", True)
+            created_by = str(g.get("created_by") or "")
+            
+            # Check if user has an invite to this private group
+            has_invite = False
+            if not is_pub and not is_joined and created_by != str(user_id):
+                try:
+                    inv_res = supabase_client.from_("group_invites").select("id").eq("group_id", gid).eq("invitee_id", user_id).maybe_single().execute()
+                    if inv_res and inv_res.data:
+                        has_invite = True
+                except Exception:
+                    pass
+
+            # Private groups are ONLY visible to joined members, creators, or invited users
+            if is_pub or is_joined or created_by == str(user_id) or has_invite:
+                visible_groups.append(g)
+
+        return visible_groups
 
     def create_group(self, group_data: Dict[str, Any]) -> Dict[str, Any]:
         res = supabase_client.from_("groups").insert(group_data).execute()
