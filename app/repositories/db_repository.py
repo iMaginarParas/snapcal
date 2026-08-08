@@ -377,58 +377,69 @@ class DBRepository:
 
     # --- Friends ---
     def get_friends(self, user_id: str) -> List[Dict[str, Any]]:
+        """Returns all accepted friends for the user in both directions (requester & receiver)."""
+        raw_friends_map = {}
+
+        # Direction 1: user_id = me, friend_id = friend
         try:
-            res = supabase_client.from_("friendships").select("id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)").eq("user_id", user_id).eq("status", "accepted").execute()
-            data = res.data
-        except Exception:
-            try:
-                res = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).eq("status", "accepted").execute()
-                data = res.data
-                # Fetch users manually
-                for item in data:
-                    uid = item["friend_id"]
-                    user_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").eq("id", uid).single().execute()
-                    item["users"] = user_res.data if user_res else {}
-            except Exception:
-                data = []
+            res1 = supabase_client.from_("friendships").select(
+                "id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)"
+            ).eq("user_id", user_id).eq("status", "accepted").execute()
+            if res1 and res1.data:
+                for row in res1.data:
+                    fid = str(row.get("friend_id") or "")
+                    friend_u = row.get("users") or {}
+                    if fid and fid != str(user_id):
+                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid, "user": friend_u}
+        except Exception as e:
+            print(f"[DbRepo] get_friends direction 1 error: {e}")
+
+        # Direction 2: friend_id = me, user_id = friend
+        try:
+            res2 = supabase_client.from_("friendships").select(
+                "id, status, user_id, users!user_id(id, name, email, username, profile_picture_url)"
+            ).eq("friend_id", user_id).eq("status", "accepted").execute()
+            if res2 and res2.data:
+                for row in res2.data:
+                    fid = str(row.get("user_id") or "")
+                    friend_u = row.get("users") or {}
+                    if fid and fid != str(user_id) and fid not in raw_friends_map:
+                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid, "user": friend_u}
+        except Exception as e:
+            print(f"[DbRepo] get_friends direction 2 error: {e}")
 
         result = []
-        if data:
-            for f in data:
-                friend_user = f.get("users") or f.get("friend") or {}
-                fid = f.get("friend_id") or friend_user.get("id")
-                if not fid:
-                    continue
-                
-                # Get daily stats for the friend
-                today_str = datetime.utcnow().isoformat().split("T")[0]
-                steps = 0
-                try:
-                    stats_res = supabase_client.from_("daily_stats").select("steps").eq("user_id", fid).eq("date", today_str).maybe_single().execute()
-                    if stats_res and stats_res.data:
-                        steps = stats_res.data.get("steps") or 0
-                except Exception:
-                    pass
+        today_str = datetime.utcnow().isoformat().split("T")[0]
 
-                disp_name = self._resolve_display_name(
-                    friend_user.get("name"), 
-                    friend_user.get("username"), 
-                    friend_user.get("email")
-                )
-                avatar_inits = self._get_avatar_initials(disp_name)
-                    
-                result.append({
-                    "id": str(f.get("id")),
-                    "friend_id": str(fid),
-                    "name": disp_name,
-                    "username": friend_user.get("username") or "",
-                    "email": friend_user.get("email") or "",
-                    "profile_picture_url": friend_user.get("profile_picture_url"),
-                    "steps": steps,
-                    "calories": int(steps * 0.045),
-                    "avatar": avatar_inits,
-                    "status": "Active"
-                })
+        for fid, info in raw_friends_map.items():
+            friend_user = info["user"]
+            steps = 0
+            try:
+                stats_res = supabase_client.from_("daily_stats").select("steps").eq("user_id", fid).eq("date", today_str).maybe_single().execute()
+                if stats_res and stats_res.data:
+                    steps = stats_res.data.get("steps") or 0
+            except Exception:
+                pass
+
+            disp_name = self._resolve_display_name(
+                friend_user.get("name"),
+                friend_user.get("username"),
+                friend_user.get("email")
+            )
+            avatar_inits = self._get_avatar_initials(disp_name)
+
+            result.append({
+                "id": str(info["row_id"]),
+                "friend_id": str(fid),
+                "name": disp_name,
+                "username": friend_user.get("username") or "",
+                "email": friend_user.get("email") or "",
+                "profile_picture_url": friend_user.get("profile_picture_url"),
+                "steps": steps,
+                "calories": int(steps * 0.045),
+                "avatar": avatar_inits,
+                "status": "Active"
+            })
         return result
 
     def get_friend_suggestions(self, user_id: str) -> List[Dict[str, Any]]:
