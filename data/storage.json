@@ -1,36 +1,36 @@
 {
   "users": {
-    "35829a73-ef5f-4397-bca4-34dbf3cf7f6b": {
-      "id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "6e88a124-805d-4db1-91c5-0bca76aacd1d": {
+      "id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "email": "test_food@test.com",
-      "username": "testuser_18317a28",
+      "username": "testuser_32ee55d7",
       "created_at": "2026-07-19T00:00:00Z",
       "name": "Test User",
       "goals": "Lose Weight",
       "weight": 85.0,
       "height": 180.0,
-      "referral_code": "FIT-TC6YB4",
+      "referral_code": "FIT-1V296Y",
       "calorie_goal": 2200.0,
       "protein_goal": 150.0,
       "carbs_goal": 200.0,
       "fats_goal": 70.0
     },
-    "77ad5fe5-efd4-49f1-81d7-f927fe0b29d0": {
-      "id": "77ad5fe5-efd4-49f1-81d7-f927fe0b29d0",
+    "33065700-4534-4f64-80fb-e788c29683af": {
+      "id": "33065700-4534-4f64-80fb-e788c29683af",
       "email": "ref_friend@test.com",
-      "username": "ref_friend_adde",
+      "username": "ref_friend_dab7",
       "created_at": "2026-07-19T00:00:00Z",
-      "referred_by": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b"
+      "referred_by": "6e88a124-805d-4db1-91c5-0bca76aacd1d"
     },
-    "bec9a821-a63d-4655-9e58-bcd5766279d3": {
-      "id": "bec9a821-a63d-4655-9e58-bcd5766279d3",
+    "c98264d3-c10d-4871-afcc-4648e591db32": {
+      "id": "c98264d3-c10d-4871-afcc-4648e591db32",
       "email": "dmfriend@example.com",
-      "username": "dmfriend_b9c0",
+      "username": "dmfriend_2744",
       "created_at": "2026-07-19T00:00:00Z"
     }
   },
   "profiles": {
-    "34c65068-f2da-4c15-9385-e17fa407f474": {
+    "6f55f304-3b98-49d5-a361-cf09a26b8cfc": {
       "age": 28,
       "gender": "Male",
       "height_cm": 180.0,
@@ -48,15 +48,15 @@
       "fat_target": 74,
       "fiber_target": 37,
       "water_target": 3475,
-      "updated_at": "2026-08-07T12:00:49.602093",
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "id": "34c65068-f2da-4c15-9385-e17fa407f474"
+      "updated_at": "2026-08-08T14:16:23.252446",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "id": "6f55f304-3b98-49d5-a361-cf09a26b8cfc"
     }
   },
   "meals": {
-    "meal_1786084249490": {
-      "id": "meal_1786084249490",
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "meal_1786178783101": {
+      "id": "meal_1786178783101",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "name": "Idli",
       "meal_type": "Lunch",
       "total_weight": 0.0,
@@ -68,9 +68,9 @@
       "image_url": null,
       "logged_at": "2026-06-26T12:00:00.000Z"
     },
-    "meal_1786084249501": {
-      "id": "meal_1786084249501",
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "meal_1786178783114": {
+      "id": "meal_1786178783114",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "name": "Idli",
       "meal_type": "Lunch",
       "total_weight": 0.0,
@@ -85,8 +85,8 @@
   },
   "foodItems": {},
   "workouts": {
-    "6cf06ee6-90df-4fb1-8048-4777c70b5276": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "385b6687-e8b5-4ff7-869a-912351b6d967": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "workout_name": "Push Day",
       "distance": 0.0,
       "duration_seconds": 3600,
@@ -106,55 +106,55 @@
       ],
       "completed": true,
       "completed_at": "2026-06-26T12:00:00.000Z",
-      "id": "6cf06ee6-90df-4fb1-8048-4777c70b5276"
+      "id": "385b6687-e8b5-4ff7-869a-912351b6d967"
     }
   },
   "dailyStats": {
-    "5d110e31-d67e-4b2d-8653-3fc03651c2ac": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "25d3f933-b99a-43ff-8036-e807cdf62d08": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "date": "2026-06-26",
       "steps": 4500,
       "water_ml": 0,
-      "id": "5d110e31-d67e-4b2d-8653-3fc03651c2ac"
+      "id": "25d3f933-b99a-43ff-8036-e807cdf62d08"
     }
   },
   "measurementLogs": {},
   "fastingLogs": {
-    "8b07f206-e8b5-441e-853b-73c86c08447e": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "88999aaf-4c07-4241-a673-c012e5374613": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "protocol": "16-8",
-      "start_time": "2026-08-07T12:00:49.635711Z",
+      "start_time": "2026-08-08T14:16:23.284582Z",
       "completed": true,
-      "id": "8b07f206-e8b5-441e-853b-73c86c08447e",
-      "end_time": "2026-08-07T12:00:49.648181Z"
+      "id": "88999aaf-4c07-4241-a673-c012e5374613",
+      "end_time": "2026-08-08T14:16:23.299083Z"
     }
   },
   "friendships": {
-    "6dad09e4-3a93-4777-bc7e-0d815e242874": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "friend_id": "77ad5fe5-efd4-49f1-81d7-f927fe0b29d0",
+    "32f16896-487f-43aa-8579-86e3ebfe74a3": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "friend_id": "33065700-4534-4f64-80fb-e788c29683af",
       "status": "pending",
-      "id": "6dad09e4-3a93-4777-bc7e-0d815e242874"
+      "id": "32f16896-487f-43aa-8579-86e3ebfe74a3"
     }
   },
   "challenges": [],
   "userChallenges": {
-    "1650bbc3-f349-4aa2-8660-f99b93189e0e": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "a5568fe6-b701-4d14-bb96-74a45f56f38c": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "challenge_id": "c123",
       "progress": 0,
       "completed": false,
-      "created_at": "2026-08-07T12:00:49.824862Z",
-      "id": "1650bbc3-f349-4aa2-8660-f99b93189e0e"
+      "created_at": "2026-08-08T14:16:23.482374Z",
+      "id": "a5568fe6-b701-4d14-bb96-74a45f56f38c"
     }
   },
   "supplements": {},
   "referrals": {
-    "4dc7ce7d-af1b-4d8a-a113-7a4a58bdd66a": {
-      "referrer_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "referred_id": "77ad5fe5-efd4-49f1-81d7-f927fe0b29d0",
-      "code_used": "FIT-TC6YB4",
-      "id": "4dc7ce7d-af1b-4d8a-a113-7a4a58bdd66a"
+    "3b747a59-f083-4fcc-a121-086f868d57e2": {
+      "referrer_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "referred_id": "33065700-4534-4f64-80fb-e788c29683af",
+      "code_used": "FIT-1V296Y",
+      "id": "3b747a59-f083-4fcc-a121-086f868d57e2"
     }
   },
   "groups": [
@@ -162,64 +162,64 @@
       "name": "Test Run Group",
       "description": "Running group",
       "is_public": true,
-      "created_by": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "created_at": "2026-08-07T12:00:49.776989Z",
-      "id": "dbb06f33-8188-42da-8050-a0fcd00681fd"
+      "created_by": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "created_at": "2026-08-08T14:16:23.435568Z",
+      "id": "2fa3e339-0dbe-4599-b4dd-82f15b01273c"
     }
   ],
   "groupMembers": {},
   "groupMessages": {
-    "46b20f91-ad4c-43bf-b96f-f91c37ca37fc": {
-      "group_id": "dbb06f33-8188-42da-8050-a0fcd00681fd",
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "bd3d4e53-1f03-474f-a3e9-1398416202a8": {
+      "group_id": "2fa3e339-0dbe-4599-b4dd-82f15b01273c",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "message": "Hello group!",
-      "created_at": "2026-08-07T12:00:49.797221Z",
-      "id": "46b20f91-ad4c-43bf-b96f-f91c37ca37fc"
+      "created_at": "2026-08-08T14:16:23.454493Z",
+      "id": "bd3d4e53-1f03-474f-a3e9-1398416202a8"
     }
   },
   "exports": {},
   "exportAuditLogs": {},
   "directMessages": [
     {
-      "id": "dm_1786084249907",
-      "sender_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "receiver_id": "bec9a821-a63d-4655-9e58-bcd5766279d3",
+      "id": "dm_1786178783563",
+      "sender_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "receiver_id": "c98264d3-c10d-4871-afcc-4648e591db32",
       "message": "Hey, great workout!",
-      "created_at": "2026-08-07T12:00:49.907154Z",
+      "created_at": "2026-08-08T14:16:23.563583Z",
       "read": false
     }
   ],
   "challengeInvites": [
     {
-      "inviter_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
-      "invitee_id": "bec9a821-a63d-4655-9e58-bcd5766279d3",
+      "inviter_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
+      "invitee_id": "c98264d3-c10d-4871-afcc-4648e591db32",
       "status": "pending",
-      "created_at": "2026-08-07T12:00:49.923474Z",
-      "id": "f66d21f7-6b97-4702-b4ba-dceba3d82515"
+      "created_at": "2026-08-08T14:16:23.578777Z",
+      "id": "3ce4391b-ec26-46f2-8e27-c222a4cb840f"
     }
   ],
   "groupInvites": [],
   "userBadges": [
     {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "badge_id": "First Log",
-      "earned_at": "2026-08-07T12:00:49.845642Z",
-      "id": "56d76f69-2ae2-4b5d-91a6-b4d56a8b7759"
+      "earned_at": "2026-08-08T14:16:23.506967Z",
+      "id": "779fe61e-4357-4dbb-b14c-3230a0ba1599"
     }
   ],
   "supplementLogs": [
     {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "supplement_id": "supp123",
       "date": "2026-08-03",
-      "taken_at": "2026-08-07T12:00:49.874298Z",
-      "id": "1e0a82d9-40cf-4809-9752-69fb71e32968"
+      "taken_at": "2026-08-08T14:16:23.532560Z",
+      "id": "d9c14178-93e3-44d0-9606-322bb74653b5"
     }
   ],
   "favorite_foods": {},
   "meal_templates": {
-    "01eea8b4-f19a-4a32-a797-085cf2a559e0": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "d5f7874e-2916-43cb-8b8c-ad539358ae60": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "template_name": "My Standard Breakfast",
       "foods": [
         {
@@ -237,12 +237,12 @@
           "serving": "1 serving"
         }
       ],
-      "id": "01eea8b4-f19a-4a32-a797-085cf2a559e0"
+      "id": "d5f7874e-2916-43cb-8b8c-ad539358ae60"
     }
   },
   "daily_steps": {
-    "3b8d5588-8c9c-4b28-8333-c3e47653d242": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "0bfad1a1-8daa-449d-b729-de5de1ac0674": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "date": "2026-06-26",
       "sensor_steps": 4000,
       "health_connect_steps": 3000,
@@ -252,18 +252,18 @@
       "active_minutes": 45,
       "baseline": 1000,
       "last_sensor_value": 5000,
-      "last_sync": "2026-08-07T12:00:49.578526Z",
-      "created_at": "2026-08-07T12:00:49.578526Z",
-      "updated_at": "2026-08-07T12:00:49.578526Z",
-      "id": "3b8d5588-8c9c-4b28-8333-c3e47653d242"
+      "last_sync": "2026-08-08T14:16:23.219191Z",
+      "created_at": "2026-08-08T14:16:23.219191Z",
+      "updated_at": "2026-08-08T14:16:23.219191Z",
+      "id": "0bfad1a1-8daa-449d-b729-de5de1ac0674"
     }
   },
   "weight_history": {
-    "09369c55-7726-49a4-b6ab-3826f1de2c9c": {
-      "user_id": "35829a73-ef5f-4397-bca4-34dbf3cf7f6b",
+    "7ab1e62d-51f8-4569-a8f0-d48d1bd3a919": {
+      "user_id": "6e88a124-805d-4db1-91c5-0bca76aacd1d",
       "weight": 85.0,
       "bmi": 26.2,
-      "id": "09369c55-7726-49a4-b6ab-3826f1de2c9c"
+      "id": "7ab1e62d-51f8-4569-a8f0-d48d1bd3a919"
     }
   }
 }

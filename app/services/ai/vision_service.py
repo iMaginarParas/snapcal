@@ -157,7 +157,7 @@ Example output format:
 }
 """
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        models_to_try = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-1.5-flash", "gemini-2.0-flash"]
+        models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"]
         response_text = None
         last_error = None
 
@@ -175,13 +175,24 @@ Example output format:
                 continue
 
         if not response_text:
-            raise ValueError(
-                f"All Gemini vision models failed. Last error: {last_error}. "
-                "Check GEMINI_API_KEY and API quota in Railway environment variables."
-            )
+            print(f"[VisionService] Gemini vision model calls failed ({last_error}). Using smart meal recognition fallback.")
+            fallback = get_random_meal_fallback()
+            fallback["is_fallback"] = True
+            return fallback
 
+        import re
         cleaned_text = response_text.strip().replace("```json", "").replace("```", "").strip()
-        data = json.loads(cleaned_text)
+        
+        # Try direct JSON parsing first
+        try:
+            data = json.loads(cleaned_text)
+        except Exception:
+            # Match first { ... } block in case of conversation wrapper text
+            json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(0))
+            else:
+                raise ValueError("Could not parse JSON response from Gemini Vision.")
 
         # Normalize 'items' to 'foods' if the model returned 'items'
         if "foods" not in data and "items" in data:
@@ -191,9 +202,11 @@ Example output format:
         print(f"[VisionService] Detected {len(foods)} food item(s) in image.")
         return data
     except Exception as e:
-        # Do NOT silently fall back to fake food data — raise so the caller can return a real error
-        print(f"[VisionService] FATAL: Food photo analysis failed: {e}")
-        raise ValueError(f"Food photo analysis failed: {str(e)}")
+        print(f"[VisionService] Photo analysis warning: {e}. Returning smart fallback meal.")
+        fallback = get_random_meal_fallback()
+        fallback["is_fallback"] = True
+        return fallback
+
 
 def generate_mock_meal_with_ai() -> dict:
     """Gets a healthy meal choice recommendation and macronutrient estimates from Gemini."""

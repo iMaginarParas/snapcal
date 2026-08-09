@@ -33,8 +33,8 @@ async def analyze_nutrition_endpoint(
             # If the failure is due to invalid API key, missing env var, quota, or rate limit
             is_api_config_issue = any(k in error_msg.lower() for k in ["api key", "apikey", "quota", "credential", "invalid", "400", "403", "429", "unauthorized", "gemini"])
             
-            user_error = f"Gemini AI Service Error: {error_msg}" if is_api_config_issue else "Could not identify food items in this photo. Please try again with a clearer, well-lit image."
-            error_code = "API_KEY_ERROR" if is_api_config_issue else "ANALYSIS_FAILED"
+            user_error = f"Analysis Error: {error_msg}"
+            error_code = "ANALYSIS_FAILED"
 
             return {
                 "success": False,
@@ -42,6 +42,7 @@ async def analyze_nutrition_endpoint(
                 "error_code": error_code,
                 "detail": error_msg
             }
+
 
         if not res.get("success"):
             return res
