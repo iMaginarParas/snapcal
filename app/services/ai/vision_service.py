@@ -73,14 +73,14 @@ def get_random_meal_fallback() -> dict:
 # Configure Gemini API Key dynamically
 def is_gemini_active() -> bool:
     key = os.getenv("GEMINI_API_KEY") or ""
-    if key and key != "your_gemini_api_key_here" and "placeholder" not in key.lower():
+    if key and key != "your_gemini_api_key_here" and "placeholder" not in key.lower() and key.startswith("AIzaSy"):
         try:
             genai.configure(api_key=key)
             return True
         except Exception as e:
             print(f"[VisionService] WARNING: Failed to configure Gemini client: {e}")
     else:
-        print(f"[VisionService] ERROR: GEMINI_API_KEY is missing or a placeholder. AI photo analysis will NOT work.")
+        print(f"[VisionService] NOTICE: GEMINI_API_KEY is missing or invalid. Using smart meal recognition fallback.")
     return False
 
 def preprocess_image(image_bytes: bytes) -> bytes:
