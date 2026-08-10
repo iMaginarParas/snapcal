@@ -114,6 +114,15 @@ def preprocess_image(image_bytes: bytes) -> bytes:
         print(f"Image preprocessing error: {e}. Returning original bytes.")
         return image_bytes
 
+def _get_gemini_model(preferred_names=None):
+    candidates = preferred_names or ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
+    for name in candidates:
+        try:
+            return genai.GenerativeModel(name)
+        except Exception:
+            continue
+    return genai.GenerativeModel("gemini-2.5-flash")
+
 def analyze_meal_image_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
     """
     Sends the preprocessed image to Gemini Vision to detect food items.
@@ -157,7 +166,7 @@ Example output format:
 }
 """
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        models_to_try = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
+        models_to_try = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
         response_text = None
         last_error = None
 
@@ -213,7 +222,7 @@ def generate_mock_meal_with_ai() -> dict:
     try:
         if not is_gemini_active():
             raise ValueError("Gemini key not configured")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _get_gemini_model()
         prompt = """Generate a realistic, healthy meal choice suitable for a fitness tracking application (e.g., Avocado Toast, Salmon Salad, Chicken Protein Bowl, Greek Yogurt with Berries, etc.) and estimate its nutritional values.
         Return the response strictly as a JSON object with keys: "name" (string), "calories" (number), "protein" (number), "carbs" (number), "fats" (number). Do not include markdown formatting or additional text."""
         response = model.generate_content(prompt)
@@ -234,7 +243,7 @@ def analyze_meal_text_with_ai(description: str) -> dict:
     try:
         if not is_gemini_active():
             raise ValueError("Gemini key not configured")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _get_gemini_model()
         prompt = f"""Analyze this food description: "{description}". Provide a highly accurate estimation of:
         1. The name of the dish
         2. Total Calories
@@ -260,7 +269,7 @@ def analyze_meal_label_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg"
             raise ValueError("Gemini key not configured")
         processed_bytes = preprocess_image(image_bytes)
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _get_gemini_model()
         prompt = f"""Analyze this nutrition label image.{f' User notes/context: "{custom_prompt}".' if custom_prompt else ''} Extract:
         1. The product name (or a descriptive name based on the label/packaging)
         2. Calories per serving
@@ -283,9 +292,9 @@ def analyze_meal_label_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg"
 
 def analyze_meal_barcode_with_ai(barcode: str) -> dict:
     try:
-        if not is_gemini_configured:
+        if not is_gemini_active():
             raise ValueError("Gemini key not configured")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _get_gemini_model()
         prompt = f"""Provide estimated nutrition facts (calories, protein, carbs, fats) for the product with UPC/barcode or name: "{barcode}". If the barcode format is standard, estimate the realistic food item.
         Return the response strictly as a JSON object with keys: "name" (string), "calories" (number), "protein" (number), "carbs" (number), "fats" (number). Do not include markdown formatting or additional text."""
         response = model.generate_content(prompt)
@@ -304,7 +313,9 @@ def analyze_meal_barcode_with_ai(barcode: str) -> dict:
 
 def generate_workout_insight_with_ai(workouts: list, daily_stats: dict) -> str:
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        if not is_gemini_active():
+            raise ValueError("Gemini key not configured")
+        model = _get_gemini_model()
         prompt = f"""Based on the following user data:
         Workouts: {json.dumps(workouts[:5])}
         Daily Stats: {json.dumps(daily_stats)}
@@ -322,9 +333,11 @@ def generate_daily_report_insight_with_ai(
     calorie_burned: float
 ) -> dict:
     try:
+        if not is_gemini_active():
+            raise ValueError("Gemini key not configured")
         steps = daily_stats.get("steps") or 0
         water = daily_stats.get("water_ml") or 0
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _get_gemini_model()
         prompt = f"""You are an elite fitness coach and nutritionist. Analyze the user's daily health activity:
         Date Stats: Steps: {steps}, Water Intake: {water} ml, Calorie Intake: {calorie_intake} kcal, Calorie Burned: {calorie_burned} kcal.
         Logged Meals: {json.dumps([{'name': m.get('name'), 'calories': m.get('calories') or m.get('total_calories'), 'protein': m.get('protein'), 'carbs': m.get('carbs'), 'fats': m.get('fat') or m.get('fats')} for m in meals])}

@@ -14,77 +14,55 @@ async def analyze_meal_endpoint(image: UploadFile = File(...), user_id: str = De
 
 @router.post("/nutrition/analyze")
 async def analyze_nutrition_endpoint(
-    request: Request,
+    image: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id)
 ):
-    content_type = request.headers.get("content-type", "")
-    if "multipart/form-data" in content_type:
-        form = await request.form()
-        image = form.get("image")
-        if not image or not isinstance(image, UploadFile):
-            return {"success": False, "error": "Image file is required", "error_code": "MISSING_IMAGE"}
-
-        try:
-            res = await meal_service.analyze_meal_image(user_id, image)
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[MealsAPI] analyze_nutrition_endpoint failed: {error_msg}")
-            
-            # If the failure is due to invalid API key, missing env var, quota, or rate limit
-            is_api_config_issue = any(k in error_msg.lower() for k in ["api key", "apikey", "quota", "credential", "invalid", "400", "403", "429", "unauthorized", "gemini"])
-            
-            user_error = f"Analysis Error: {error_msg}"
-            error_code = "ANALYSIS_FAILED"
-
-            return {
-                "success": False,
-                "error": user_error,
-                "error_code": error_code,
-                "detail": error_msg
-            }
-
-
-        if not res.get("success"):
-            return res
-
-        meal_data = res.get("data") or {}
-        foods_list = meal_data.get("foods") or []
-        first_food_name = foods_list[0].get("food_name") or foods_list[0].get("normalized_name") or foods_list[0].get("name") if foods_list else None
-        meal_name = (meal_data.get("name") or "").strip()
-        if not meal_name or meal_name.lower() in ["unknown meal", "analyzed meal", "meal log", "analyzed food"]:
-            meal_name = first_food_name or "Analyzed Meal"
-
-        m_cal = int(meal_data.get("total_calories") or meal_data.get("calories") or 0)
-        m_prot = float(meal_data.get("protein") or 0.0)
-        m_carbs = float(meal_data.get("carbs") or 0.0)
-        m_fats = float(meal_data.get("fat") or meal_data.get("fats") or 0.0)  # Fixed: was `meal.get` (NameError)
-
-        if (m_cal == 0 or m_prot == 0.0) and foods_list:
-            m_cal = sum(int(f.get("calories") or 0) for f in foods_list)
-            m_prot = sum(float(f.get("protein") or 0.0) for f in foods_list)
-            m_carbs = sum(float(f.get("carbs") or 0.0) for f in foods_list)
-            m_fats = sum(float(f.get("fat") or f.get("fats") or 0.0) for f in foods_list)
-
-        print(f"[MealsAPI] Analysis complete: {meal_name} | {m_cal} kcal | P:{m_prot}g C:{m_carbs}g F:{m_fats}g")
-
-        return {
-            "success": True,
-            "data": {
-                "name": meal_name,
-                "calories": m_cal,
-                "protein": m_prot,
-                "carbs": m_carbs,
-                "fats": m_fats,
-                "foods": foods_list
-            }
-        }
-    else:
-        # Non-multipart request to an image-only endpoint — return a clear error
+    try:
+        res = await meal_service.analyze_meal_image(user_id, image)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[MealsAPI] analyze_nutrition_endpoint failed: {error_msg}")
         return {
             "success": False,
-            "error": "This endpoint requires a multipart/form-data image upload.",
-            "error_code": "INVALID_REQUEST"
+            "error": f"Analysis Error: {error_msg}",
+            "error_code": "ANALYSIS_FAILED",
+            "detail": error_msg
         }
+
+    if not res.get("success"):
+        return res
+
+    meal_data = res.get("data") or {}
+    foods_list = meal_data.get("foods") or []
+    first_food_name = foods_list[0].get("food_name") or foods_list[0].get("normalized_name") or foods_list[0].get("name") if foods_list else None
+    meal_name = (meal_data.get("name") or "").strip()
+    if not meal_name or meal_name.lower() in ["unknown meal", "analyzed meal", "meal log", "analyzed food", "food log"]:
+        meal_name = first_food_name or "Analyzed Meal"
+
+    m_cal = int(meal_data.get("total_calories") or meal_data.get("calories") or 0)
+    m_prot = float(meal_data.get("protein") or 0.0)
+    m_carbs = float(meal_data.get("carbs") or 0.0)
+    m_fats = float(meal_data.get("fat") or meal_data.get("fats") or 0.0)
+
+    if (m_cal == 0 or m_prot == 0.0) and foods_list:
+        m_cal = sum(int(f.get("calories") or 0) for f in foods_list)
+        m_prot = sum(float(f.get("protein") or 0.0) for f in foods_list)
+        m_carbs = sum(float(f.get("carbs") or 0.0) for f in foods_list)
+        m_fats = sum(float(f.get("fat") or f.get("fats") or 0.0) for f in foods_list)
+
+    print(f"[MealsAPI] Analysis complete: {meal_name} | {m_cal} kcal | P:{m_prot}g C:{m_carbs}g F:{m_fats}g")
+
+    return {
+        "success": True,
+        "data": {
+            "name": meal_name,
+            "calories": m_cal,
+            "protein": m_prot,
+            "carbs": m_carbs,
+            "fats": m_fats,
+            "foods": foods_list
+        }
+    }
 
 @router.post("/nutrition/analyze-text")
 @router.post("/nutrition/describe")
