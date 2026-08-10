@@ -115,13 +115,13 @@ def preprocess_image(image_bytes: bytes) -> bytes:
         return image_bytes
 
 def _get_gemini_model(preferred_names=None):
-    candidates = preferred_names or ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
+    candidates = preferred_names or ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.6-flash"]
     for name in candidates:
         try:
             return genai.GenerativeModel(name)
         except Exception:
             continue
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.GenerativeModel("gemini-flash-latest")
 
 def analyze_meal_image_with_ai(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
     """
@@ -166,7 +166,7 @@ Example output format:
 }
 """
         img_obj = Image.open(io.BytesIO(processed_bytes))
-        models_to_try = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-3.6-flash"]
+        models_to_try = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.6-flash"]
         response_text = None
         last_error = None
 
