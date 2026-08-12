@@ -30,7 +30,13 @@ class AnalyticsService:
                 meals = db_repository.get_meals(user_id, today_str) or []
                 stats = db_repository.get_daily_stats(user_id, today_str) or {"steps": 0}
                 
-                cal = sum(m.get("total_calories") or m.get("calories") or 0 for m in meals)
+                cal = 0
+                for m in meals:
+                    m_cal = int(m.get("total_calories") or m.get("calories") or 0)
+                    if m_cal == 0:
+                        food_items = m.get("food_items") or []
+                        m_cal = sum(int(fi.get("calories") or 0) for fi in food_items)
+                    cal += m_cal
                 steps = stats.get("steps", 0)
 
                 prompt = f"""You are Sabtrack AI Health & Fitness Coach. 
@@ -57,10 +63,37 @@ class AnalyticsService:
         # 3. Fetch daily stats
         stats = db_repository.get_daily_stats(user_id, date_str) or {"steps": 0, "water_ml": 0}
 
-        calorie_intake = sum(m.get("total_calories") or m.get("calories") or 0 for m in meals)
-        protein_intake = sum(m.get("protein") or 0 for m in meals)
-        carbs_intake = sum(m.get("carbs") or 0 for m in meals)
-        fats_intake = sum(m.get("fat") or m.get("fats") or 0 for m in meals)
+        calorie_intake = 0
+        protein_intake = 0.0
+        carbs_intake = 0.0
+        fats_intake = 0.0
+
+        for m in meals:
+            food_items = m.get("food_items") or []
+            m_cal = int(m.get("total_calories") or m.get("calories") or 0)
+            m_prot = float(m.get("protein") or 0.0)
+            m_carbs = float(m.get("carbs") or 0.0)
+            m_fat = float(m.get("fat") or m.get("fats") or 0.0)
+
+            # Fallback: aggregate from food_items if top-level fields are 0/null
+            if (m_cal == 0 or m_prot == 0.0) and food_items:
+                fi_cal = sum(int(fi.get("calories") or 0) for fi in food_items)
+                fi_prot = sum(float(fi.get("protein") or 0.0) for fi in food_items)
+                fi_carbs = sum(float(fi.get("carbs") or 0.0) for fi in food_items)
+                fi_fat = sum(float(fi.get("fat") or fi.get("fats") or 0.0) for fi in food_items)
+                if fi_cal > 0:
+                    m_cal = fi_cal
+                if fi_prot > 0:
+                    m_prot = fi_prot
+                if fi_carbs > 0:
+                    m_carbs = fi_carbs
+                if fi_fat > 0:
+                    m_fat = fi_fat
+
+            calorie_intake += m_cal
+            protein_intake += m_prot
+            carbs_intake += m_carbs
+            fats_intake += m_fat
 
         steps = stats.get("steps", 0)
         water = stats.get("water_ml", 0)
