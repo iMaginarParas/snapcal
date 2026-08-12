@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Dict, Any, List
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Dict, Any, List, Optional
 from app.repositories.db_repository import db_repository
 from app.core.dependencies import get_current_user_id
 from pydantic import BaseModel
@@ -53,4 +53,15 @@ def decline_friend_request(request_id: str, user_id: str = Depends(get_current_u
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to decline friend request: {str(e)}")
+
+@router.get("/{friend_id}/activity")
+def get_friend_activity(
+    friend_id: str,
+    date: Optional[str] = Query(None),
+    user_id: str = Depends(get_current_user_id)
+):
+    from app.services.analytics.analytics_service import analytics_service
+    report = analytics_service.get_daily_report(friend_id, date)
+    return report
+
 
