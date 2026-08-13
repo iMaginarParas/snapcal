@@ -134,8 +134,8 @@ class DBRepository:
 
     # --- Meals & Food ---
     def get_meals(self, user_id: str, date_str: str) -> List[Dict[str, Any]]:
-        res = supabase_client.from_("meals").select("*, food_items(*)").eq("user_id", user_id).gte("logged_at", f"{date_str}T00:00:00.000Z").lte("logged_at", f"{date_str}T23:59:59.999Z").execute()
-        return res.data if res else []
+        from app.repositories.meal_repository import meal_repository
+        return meal_repository.get_meals_by_date(user_id, date_str)
 
     def create_meal(self, meal_data: Dict[str, Any]) -> Dict[str, Any]:
         res = supabase_client.from_("meals").insert(meal_data).execute()

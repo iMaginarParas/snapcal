@@ -4,6 +4,7 @@ import json
 import os
 import google.generativeai as genai
 from app.repositories.db_repository import db_repository
+from app.repositories.meal_repository import meal_repository
 
 def _get_active_gemini_model():
     key = os.getenv("GEMINI_API_KEY") or ""
@@ -27,7 +28,7 @@ class AnalyticsService:
             model = _get_active_gemini_model()
             if model:
                 today_str = datetime.utcnow().isoformat().split("T")[0]
-                meals = db_repository.get_meals(user_id, today_str) or []
+                meals = meal_repository.get_meals_by_date(user_id, today_str) or []
                 stats = db_repository.get_daily_stats(user_id, today_str) or {"steps": 0}
                 
                 cal = 0
@@ -54,8 +55,8 @@ class AnalyticsService:
     def get_daily_report(self, user_id: str, date: Optional[str]) -> dict:
         date_str = date or datetime.utcnow().isoformat().split("T")[0]
         
-        # 1. Fetch meals
-        meals = db_repository.get_meals(user_id, date_str) or []
+        # 1. Fetch meals (from Supabase + local JSON store)
+        meals = meal_repository.get_meals_by_date(user_id, date_str) or []
         
         # 2. Fetch workouts
         workouts = db_repository.get_workouts(user_id, date_str) or []
@@ -68,19 +69,30 @@ class AnalyticsService:
         carbs_intake = 0.0
         fats_intake = 0.0
 
+        def _parse_num(val) -> float:
+            if val is None:
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            try:
+                cleaned = str(val).replace("kcal", "").replace("g", "").strip()
+                return float(cleaned)
+            except Exception:
+                return 0.0
+
         for m in meals:
             food_items = m.get("food_items") or []
-            m_cal = int(m.get("total_calories") or m.get("calories") or 0)
-            m_prot = float(m.get("protein") or 0.0)
-            m_carbs = float(m.get("carbs") or 0.0)
-            m_fat = float(m.get("fat") or m.get("fats") or 0.0)
+            m_cal = _parse_num(m.get("total_calories") or m.get("calories"))
+            m_prot = _parse_num(m.get("protein"))
+            m_carbs = _parse_num(m.get("carbs"))
+            m_fat = _parse_num(m.get("fat") or m.get("fats"))
 
             # Fallback: aggregate from food_items if top-level fields are 0/null
             if (m_cal == 0 or m_prot == 0.0) and food_items:
-                fi_cal = sum(int(fi.get("calories") or 0) for fi in food_items)
-                fi_prot = sum(float(fi.get("protein") or 0.0) for fi in food_items)
-                fi_carbs = sum(float(fi.get("carbs") or 0.0) for fi in food_items)
-                fi_fat = sum(float(fi.get("fat") or fi.get("fats") or 0.0) for fi in food_items)
+                fi_cal = sum(_parse_num(fi.get("calories")) for fi in food_items)
+                fi_prot = sum(_parse_num(fi.get("protein")) for fi in food_items)
+                fi_carbs = sum(_parse_num(fi.get("carbs")) for fi in food_items)
+                fi_fat = sum(_parse_num(fi.get("fat") or fi.get("fats")) for fi in food_items)
                 if fi_cal > 0:
                     m_cal = fi_cal
                 if fi_prot > 0:
@@ -90,7 +102,7 @@ class AnalyticsService:
                 if fi_fat > 0:
                     m_fat = fi_fat
 
-            calorie_intake += m_cal
+            calorie_intake += int(round(m_cal))
             protein_intake += m_prot
             carbs_intake += m_carbs
             fats_intake += m_fat

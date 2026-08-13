@@ -145,7 +145,11 @@ class MealRepository:
         return db_items
 
     def get_meals_by_date(self, user_id: str, date_str: str) -> List[Dict[str, Any]]:
-        uid_str = str(user_id)
+        uid_str = str(user_id).lower()
+
+        # Always reload local store to get fresh entries
+        self._in_memory_meals = _load_json_store(_MEALS_FILE)
+        self._in_memory_food_items = _load_json_store(_FOOD_ITEMS_FILE)
 
         # 1. Try Supabase
         db_meals = []
@@ -155,7 +159,7 @@ class MealRepository:
                 res = (
                     supabase.from_("meals")
                     .select("*, food_items(*)")
-                    .eq("user_id", uid_str)
+                    .eq("user_id", str(user_id))
                     .gte("logged_at", f"{date_str}T00:00:00.000Z")
                     .lte("logged_at", f"{date_str}T23:59:59.999Z")
                     .execute()
@@ -167,8 +171,12 @@ class MealRepository:
         # 2. Merge with local store (avoids duplicates by ID)
         mem_meals = [
             m for m in self._in_memory_meals
-            if str(m.get("user_id")) == uid_str
-            and str(m.get("logged_at", "")).startswith(date_str)
+            if str(m.get("user_id", "")).lower() == uid_str
+            and (
+                str(m.get("logged_at", "")).startswith(date_str)
+                or str(m.get("date", "")).startswith(date_str)
+                or str(m.get("created_at", "")).startswith(date_str)
+            )
         ]
 
         seen_ids: set = set()
@@ -179,9 +187,9 @@ class MealRepository:
                 continue
             if mid:
                 seen_ids.add(mid)
-            # Attach food_items if missing (for meals from Supabase without nested select)
-            if "food_items" not in m:
-                m["food_items"] = [fi for fi in self._in_memory_food_items if fi.get("meal_id") == mid]
+            # Attach food_items if missing
+            if "food_items" not in m or not m["food_items"]:
+                m["food_items"] = [fi for fi in self._in_memory_food_items if str(fi.get("meal_id")) == str(mid)]
             combined.append(m)
 
         return combined
