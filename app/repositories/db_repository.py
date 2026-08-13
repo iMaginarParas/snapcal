@@ -17,7 +17,9 @@ class DBRepository:
         return res.data[0] if res and res.data else {}
 
     def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-        res = supabase_client.from_("users").update(updates).eq("id", user_id).execute()
+        payload = dict(updates)
+        payload["id"] = user_id
+        res = supabase_client.from_("users").upsert(payload).execute()
         return res.data[0] if res and res.data else {}
 
     def check_username_exists(self, username: str, exclude_user_id: str) -> bool:

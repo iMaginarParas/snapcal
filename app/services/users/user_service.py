@@ -13,8 +13,8 @@ class UserService:
         return profile_service.get_profile(user_id)
 
     def update_profile(self, user_id: str, payload: ProfileUpdateRequest) -> dict:
-        if payload.username is not None:
-            if db_repository.check_username_exists(payload.username, user_id):
+        if payload.username is not None and payload.username.strip() and payload.username.strip() != "guest_user":
+            if db_repository.check_username_exists(payload.username.strip(), user_id):
                 raise BadRequestException(detail="Username is already taken")
                 
         return profile_service.update_profile(user_id, payload)
