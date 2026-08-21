@@ -18,9 +18,14 @@ class DBRepository:
 
     def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         payload = dict(updates)
+        payload.pop("id", None)
+        res = supabase_client.from_("users").update(payload).eq("id", user_id).execute()
+        if res and res.data:
+            return res.data[0]
+        # If no row was updated, fallback to insert with id
         payload["id"] = user_id
-        res = supabase_client.from_("users").upsert(payload).execute()
-        return res.data[0] if res and res.data else {}
+        res_insert = supabase_client.from_("users").insert(payload).execute()
+        return res_insert.data[0] if res_insert and res_insert.data else {}
 
     def check_username_exists(self, username: str, exclude_user_id: str) -> bool:
         res = supabase_client.from_("users").select("id").eq("username", username).neq("id", exclude_user_id).execute()

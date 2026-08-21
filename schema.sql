@@ -22,6 +22,8 @@ DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
 CREATE POLICY "Users can view own profile" ON public.users FOR SELECT USING (auth.uid() = id);
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
+CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Trigger to automatically create a user profile when they sign up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -440,5 +442,19 @@ ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage own support tickets" ON public.support_tickets;
 CREATE POLICY "Users can manage own support tickets" ON public.support_tickets FOR ALL USING (auth.uid() = user_id OR auth.uid() IS NULL);
 
+-- 18. Supabase Storage: Profile Pictures Bucket & Policies
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('profile-pictures', 'profile-pictures', true)
+ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Public Profile Pictures Access" ON storage.objects;
+CREATE POLICY "Public Profile Pictures Access" ON storage.objects
+FOR SELECT USING (bucket_id = 'profile-pictures');
 
+DROP POLICY IF EXISTS "Authenticated users can upload profile pictures" ON storage.objects;
+CREATE POLICY "Authenticated users can upload profile pictures" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'profile-pictures');
+
+DROP POLICY IF EXISTS "Authenticated users can update profile pictures" ON storage.objects;
+CREATE POLICY "Authenticated users can update profile pictures" ON storage.objects
+FOR UPDATE USING (bucket_id = 'profile-pictures');
