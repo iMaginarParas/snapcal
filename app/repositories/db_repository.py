@@ -381,21 +381,25 @@ class DBRepository:
         u = (username or "").strip()
         e = (email or "").strip()
         
-        if n and n.lower() not in ["user", "friend user", "user user", "none", "null"]:
+        if n and n.lower() not in ["user", "friend user", "user user", "none", "null", "guest user"]:
             return n
-        if u and u.lower() not in ["user", "none", "null"]:
+        if u and u.lower() not in ["user", "none", "null", "guest_user"]:
             return u
         if e and "@" in e:
-            prefix = e.split("@")[0]
-            if prefix and prefix.lower() not in ["user", "none", "null"]:
-                return prefix
-        return n or u or "User"
+            prefix = e.split("@")[0].strip()
+            if prefix and prefix.lower() not in ["user", "none", "null", "guest"]:
+                return prefix.capitalize()
+        if n:
+            return n
+        if u:
+            return u
+        return "Friend"
 
     @staticmethod
     def _get_avatar_initials(display_name: str) -> str:
         cleaned = (display_name or "").strip()
         if not cleaned:
-            return "U"
+            return "FR"
         parts = [p for p in cleaned.split(" ") if p]
         if len(parts) >= 2:
             return (parts[0][0] + parts[1][0]).upper()
@@ -408,37 +412,45 @@ class DBRepository:
 
         # Direction 1: user_id = me, friend_id = friend
         try:
-            res1 = supabase_client.from_("friendships").select(
-                "id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)"
-            ).eq("user_id", user_id).eq("status", "accepted").execute()
+            res1 = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).eq("status", "accepted").execute()
             if res1 and res1.data:
                 for row in res1.data:
                     fid = str(row.get("friend_id") or "")
-                    friend_u = row.get("users") or {}
                     if fid and fid != str(user_id):
-                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid, "user": friend_u}
+                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
         except Exception as e:
             print(f"[DbRepo] get_friends direction 1 error: {e}")
 
         # Direction 2: friend_id = me, user_id = friend
         try:
-            res2 = supabase_client.from_("friendships").select(
-                "id, status, user_id, users!user_id(id, name, email, username, profile_picture_url)"
-            ).eq("friend_id", user_id).eq("status", "accepted").execute()
+            res2 = supabase_client.from_("friendships").select("id, status, user_id").eq("friend_id", user_id).eq("status", "accepted").execute()
             if res2 and res2.data:
                 for row in res2.data:
                     fid = str(row.get("user_id") or "")
-                    friend_u = row.get("users") or {}
                     if fid and fid != str(user_id) and fid not in raw_friends_map:
-                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid, "user": friend_u}
+                        raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
         except Exception as e:
             print(f"[DbRepo] get_friends direction 2 error: {e}")
+
+        if not raw_friends_map:
+            return []
+
+        # Batch fetch all friend user profiles to guarantee accurate names, usernames, and avatars
+        users_by_id = {}
+        try:
+            fids_list = list(raw_friends_map.keys())
+            users_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").in_("id", fids_list).execute()
+            if users_res and users_res.data:
+                for u in users_res.data:
+                    users_by_id[str(u["id"])] = u
+        except Exception as e:
+            print(f"[DbRepo] get_friends users fetch error: {e}")
 
         result = []
         today_str = datetime.utcnow().isoformat().split("T")[0]
 
         for fid, info in raw_friends_map.items():
-            friend_user = info["user"]
+            friend_user = users_by_id.get(fid) or {}
             steps = 0
             try:
                 stats_res = supabase_client.from_("daily_stats").select("steps").eq("user_id", fid).eq("date", today_str).maybe_single().execute()
