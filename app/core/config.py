@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # AI Config
     GEMINI_API_KEY: str = ""
 
+    # Razorpay Config
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

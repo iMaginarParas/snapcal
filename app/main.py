@@ -24,6 +24,7 @@ from app.api.support import router as support_router
 from app.api.badges import router as badges_router
 from app.api.dm import router as dm_router
 from app.api.notifications import router as notifications_router
+from app.api.payments import router as payments_router
 
 
 app = FastAPI(
@@ -141,6 +142,7 @@ app.include_router(support_router, prefix=settings.API_V1_STR)
 app.include_router(badges_router, prefix=settings.API_V1_STR)
 app.include_router(dm_router, prefix=settings.API_V1_STR)
 app.include_router(notifications_router, prefix=settings.API_V1_STR)
+app.include_router(payments_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
