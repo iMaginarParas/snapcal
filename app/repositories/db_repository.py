@@ -380,18 +380,19 @@ class DBRepository:
         n = (name or "").strip()
         u = (username or "").strip()
         e = (email or "").strip()
+        generic = {"user", "friend", "friend user", "user user", "none", "null", "guest user", "guest"}
         
-        if n and n.lower() not in ["user", "friend user", "user user", "none", "null", "guest user"]:
+        if n and n.lower() not in generic:
             return n
-        if u and u.lower() not in ["user", "none", "null", "guest_user"]:
+        if u and u.lower() not in generic:
             return u
         if e and "@" in e:
             prefix = e.split("@")[0].strip()
-            if prefix and prefix.lower() not in ["user", "none", "null", "guest"]:
+            if prefix and prefix.lower() not in generic:
                 return prefix.capitalize()
-        if n:
+        if n and n.lower() != "user":
             return n
-        if u:
+        if u and u.lower() != "user":
             return u
         return "Friend"
 
@@ -409,42 +410,101 @@ class DBRepository:
     def get_friends(self, user_id: str) -> List[Dict[str, Any]]:
         """Returns all accepted friends for the user in both directions (requester & receiver)."""
         raw_friends_map = {}
+        users_by_id = {}
 
-        # Direction 1: user_id = me, friend_id = friend
+        # Direction 1: user_id = me, friend_id = friend (attempt foreign key join first)
         try:
-            res1 = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).eq("status", "accepted").execute()
+            res1 = supabase_client.from_("friendships").select("id, status, friend_id, users!friend_id(id, name, email, username, profile_picture_url)").eq("user_id", user_id).eq("status", "accepted").execute()
             if res1 and res1.data:
                 for row in res1.data:
                     fid = str(row.get("friend_id") or "")
                     if fid and fid != str(user_id):
                         raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
-        except Exception as e:
-            print(f"[DbRepo] get_friends direction 1 error: {e}")
+                        if row.get("users") and isinstance(row.get("users"), dict):
+                            users_by_id[fid] = row["users"]
+        except Exception:
+            try:
+                res1 = supabase_client.from_("friendships").select("id, status, friend_id").eq("user_id", user_id).eq("status", "accepted").execute()
+                if res1 and res1.data:
+                    for row in res1.data:
+                        fid = str(row.get("friend_id") or "")
+                        if fid and fid != str(user_id):
+                            raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
+            except Exception as e1:
+                print(f"[DbRepo] get_friends direction 1 fallback error: {e1}")
 
         # Direction 2: friend_id = me, user_id = friend
         try:
-            res2 = supabase_client.from_("friendships").select("id, status, user_id").eq("friend_id", user_id).eq("status", "accepted").execute()
+            res2 = supabase_client.from_("friendships").select("id, status, user_id, users!user_id(id, name, email, username, profile_picture_url)").eq("friend_id", user_id).eq("status", "accepted").execute()
             if res2 and res2.data:
                 for row in res2.data:
                     fid = str(row.get("user_id") or "")
                     if fid and fid != str(user_id) and fid not in raw_friends_map:
                         raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
-        except Exception as e:
-            print(f"[DbRepo] get_friends direction 2 error: {e}")
+                        if row.get("users") and isinstance(row.get("users"), dict):
+                            users_by_id[fid] = row["users"]
+        except Exception:
+            try:
+                res2 = supabase_client.from_("friendships").select("id, status, user_id").eq("friend_id", user_id).eq("status", "accepted").execute()
+                if res2 and res2.data:
+                    for row in res2.data:
+                        fid = str(row.get("user_id") or "")
+                        if fid and fid != str(user_id) and fid not in raw_friends_map:
+                            raw_friends_map[fid] = {"row_id": row.get("id"), "friend_id": fid}
+            except Exception as e2:
+                print(f"[DbRepo] get_friends direction 2 fallback error: {e2}")
 
         if not raw_friends_map:
             return []
 
-        # Batch fetch all friend user profiles to guarantee accurate names, usernames, and avatars
-        users_by_id = {}
-        try:
-            fids_list = list(raw_friends_map.keys())
-            users_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").in_("id", fids_list).execute()
-            if users_res and users_res.data:
-                for u in users_res.data:
-                    users_by_id[str(u["id"])] = u
-        except Exception as e:
-            print(f"[DbRepo] get_friends users fetch error: {e}")
+        # Find friend IDs whose profile details are missing
+        missing_fids = [fid for fid in raw_friends_map.keys() if fid not in users_by_id or not users_by_id[fid].get("name")]
+        if missing_fids:
+            try:
+                users_res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").in_("id", missing_fids).execute()
+                if users_res and users_res.data:
+                    for u in users_res.data:
+                        users_by_id[str(u["id"])] = u
+            except Exception as e:
+                print(f"[DbRepo] get_friends batch fetch error: {e}")
+                # Fallback query without newer columns
+                try:
+                    users_res = supabase_client.from_("users").select("id, name, email").in_("id", missing_fids).execute()
+                    if users_res and users_res.data:
+                        for u in users_res.data:
+                            users_by_id[str(u["id"])] = u
+                except Exception:
+                    pass
+
+        # Per-user query fallback for any still missing
+        for fid in raw_friends_map.keys():
+            if fid not in users_by_id or not users_by_id[fid].get("name"):
+                try:
+                    u_res = supabase_client.from_("users").select("*").eq("id", fid).maybe_single().execute()
+                    if u_res and u_res.data:
+                        if fid in users_by_id:
+                            users_by_id[fid].update(u_res.data)
+                        else:
+                            users_by_id[fid] = u_res.data
+                except Exception:
+                    pass
+
+                # Fallback to Supabase Auth Admin if available
+                if fid not in users_by_id or not users_by_id[fid].get("email"):
+                    try:
+                        admin_u = supabase_client.auth.admin.get_user_by_id(fid)
+                        if admin_u and hasattr(admin_u, "user") and admin_u.user:
+                            u_data = admin_u.user
+                            meta = getattr(u_data, "user_metadata", {}) or {}
+                            users_by_id[fid] = {
+                                "id": fid,
+                                "email": getattr(u_data, "email", "") or "",
+                                "name": meta.get("name") or meta.get("full_name") or "",
+                                "username": meta.get("username") or "",
+                                "profile_picture_url": meta.get("avatar_url") or meta.get("picture") or meta.get("profile_picture_url")
+                            }
+                    except Exception:
+                        pass
 
         result = []
         today_str = datetime.utcnow().isoformat().split("T")[0]

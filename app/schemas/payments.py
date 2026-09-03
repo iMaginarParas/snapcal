@@ -70,7 +70,7 @@ class SubscriptionStatusResponse(BaseModel):
 
 
 class ApplyPromoRequest(BaseModel):
-    promo_code: str = Field(..., description="Promo code string (e.g. VIGATRON100)")
+    promo_code: str = Field(..., description="Promo code string")
 
 
 class ApplyPromoResponse(BaseModel):

@@ -83,7 +83,7 @@ def apply_promo(
     payload: ApplyPromoRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Apply a promo code (e.g. VIGATRON100) to activate free VIP Pro access."""
+    """Apply a promo code to activate VIP Pro access."""
     try:
         res = PaymentService.apply_promo_code(user_id=user_id, promo_code=payload.promo_code)
         return res
