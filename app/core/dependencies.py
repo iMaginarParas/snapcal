@@ -3,6 +3,7 @@ try:
 except ImportError:
     jwt = None
 
+import os
 from typing import Optional
 from fastapi import Header
 from app.core.exceptions import UnauthorizedException
@@ -23,8 +24,8 @@ def get_current_user_id(authorization: Optional[str] = Header(None)) -> str:
     """
     token = extract_token(authorization)
 
-    # Allow mock tokens in tests
-    if token.startswith("mock-token-"):
+    # Allow mock tokens in dev/test only (never in production)
+    if token.startswith("mock-token-") and os.getenv("APP_ENV", "development") != "production":
         return token.replace("mock-token-", "")
 
     jwt_secret = settings.SUPABASE_JWT_SECRET
