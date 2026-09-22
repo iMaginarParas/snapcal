@@ -83,6 +83,17 @@ def serve_privacy_page():
 @app.get("/api/join-group", response_class=HTMLResponse)
 def serve_join_group_landing_page(code: str = ""):
     app_url = f"sabtrack://join-group?code={code}" if code else "sabtrack://join-group"
+
+    # Pre-compute conditional blocks — backslashes are forbidden inside
+    # f-string {} expressions in Python < 3.12.
+    code_box_html = f'<div class="code-box">Group Code: {code}</div>' if code else ""
+    copy_btn_html = (
+        "<button onclick=\"navigator.clipboard.writeText('" + code
+        + "'); alert('Group code copied to clipboard!');\" "
+        "class=\"btn btn-secondary\">Copy Group Code</button>"
+        if code else ""
+    )
+
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -108,9 +119,9 @@ def serve_join_group_landing_page(code: str = ""):
         <div class="icon">🚀</div>
         <h1>Group Invitation</h1>
         <p>You've been invited to join a fitness group on <strong>SABTRACK AI</strong>!</p>
-        {'<div class="code-box">Group Code: ' + code + '</div>' if code else ''}
+        {code_box_html}
         <a href="{app_url}" class="btn btn-primary">Open in SABTRACK App</a>
-        {'<button onclick="navigator.clipboard.writeText(\'' + code + '\'); alert(\'Group code copied to clipboard!\');" class="btn btn-secondary">Copy Group Code</button>' if code else ''}
+        {copy_btn_html}
     </div>
     <script>
         // Automatic deep-link redirect attempt
