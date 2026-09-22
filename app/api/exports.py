@@ -4,6 +4,7 @@ from app.schemas.export_schemas import ExportCreateRequest, ExportShareRequest
 from app.repositories.export_repository import export_repository
 from app.services.exports.export_service import export_service
 from app.core.dependencies import get_current_user_id
+from app.database.supabase import supabase_client
 
 router = APIRouter(prefix="/exports", tags=["Export & Share Studio"])
 
