@@ -42,5 +42,5 @@ RUN mkdir -p uploads static data
 # Expose target port
 EXPOSE 8000
 
-# Start server using uvicorn binding to Railway dynamic $PORT
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Start server — main.py reads $PORT via os.getenv() with a safe default
+CMD ["python", "main.py"]
