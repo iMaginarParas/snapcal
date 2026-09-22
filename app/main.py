@@ -148,6 +148,10 @@ app.include_router(payments_router, prefix=settings.API_V1_STR)
 app.include_router(diet_plans_router, prefix=settings.API_V1_STR)
 app.include_router(coach_router, prefix=settings.API_V1_STR)
 
+@app.get("/")
+def root():
+    return {"status": "healthy", "service": settings.PROJECT_NAME, "version": settings.VERSION}
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": settings.PROJECT_NAME}
