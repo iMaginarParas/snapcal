@@ -34,8 +34,8 @@ def _save_store(data: Dict[str, Any]):
 
 def _get_supabase():
     try:
-        from app.database.supabase import supabase_client
-        return supabase_client
+        from app.database.supabase import get_coach_supabase
+        return get_coach_supabase()
     except Exception:
         return None
 

@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS public.coach_workouts (
     category TEXT DEFAULT 'Strength',
     difficulty TEXT DEFAULT 'Intermediate',
     duration TEXT DEFAULT '45 min',
+    playlist_url TEXT,
     exercises JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

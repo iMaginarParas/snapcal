@@ -165,7 +165,15 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": settings.PROJECT_NAME}
+    from app.database.supabase import is_supabase_live, is_coach_supabase_live
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "supabase": {
+            "track_connected": is_supabase_live(),
+            "coach_connected": is_coach_supabase_live(),
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
