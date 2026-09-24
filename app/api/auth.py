@@ -24,6 +24,10 @@ def auth_login(payload: LoginRequest):
 def auth_google_login(payload: GoogleLoginRequest):
     return auth_service.google_login(payload)
 
+@router.get("/oauth/google-url")
+def auth_google_oauth_url(redirect_to: str):
+    return auth_service.get_google_oauth_url(redirect_to)
+
 @router.post("/forgot-password")
 def auth_forgot_password(payload: ForgotPasswordRequest):
     return auth_service.forgot_password(payload.email)

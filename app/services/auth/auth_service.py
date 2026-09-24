@@ -143,6 +143,38 @@ class AuthService:
                 last_error = str(e)
         raise BadRequestException(detail=last_error)
 
+    def get_google_oauth_url(self, redirect_to: str) -> dict:
+        import urllib.parse
+        clients = _get_auth_clients()
+
+        for client in clients:
+            try:
+                res = client.auth.sign_in_with_oauth({
+                    "provider": "google",
+                    "options": {"redirect_to": redirect_to}
+                })
+                if hasattr(res, 'url') and res.url:
+                    return {"success": True, "url": res.url}
+            except Exception:
+                pass
+
+        for client in clients:
+            try:
+                base = getattr(client.auth, '_url', None) or getattr(client.auth, 'auth_url', None)
+                if base:
+                    url = f"{base}/authorize?provider=google&redirect_to={urllib.parse.quote(redirect_to)}"
+                    return {"success": True, "url": url}
+            except Exception:
+                pass
+
+        from app.core.config import settings
+        sb_url = settings.coach_supabase_url or settings.track_supabase_url
+        if sb_url and "your_supabase" not in sb_url:
+            url = f"{sb_url}/auth/v1/authorize?provider=google&redirect_to={urllib.parse.quote(redirect_to)}"
+            return {"success": True, "url": url}
+
+        raise BadRequestException(detail="Supabase Google OAuth provider is not configured.")
+
     def forgot_password(self, email: str) -> dict:
         clients = _get_auth_clients()
         for client in clients:
