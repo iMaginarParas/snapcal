@@ -21,14 +21,31 @@ def _init_supabase():
         from supabase import create_client
         from app.core.config import settings
 
-        url = settings.SUPABASE_URL
-        key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
+        import os
+        url = (
+            settings.SUPABASE_URL
+            or os.getenv("SUPABASE_URL")
+            or os.getenv("SUPABASE_URL_COACH")
+            or os.getenv("SUPABASE_URL_TRACK")
+            or ""
+        )
+        key = (
+            settings.SUPABASE_SERVICE_ROLE_KEY
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY_TRACK")
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY_COACH")
+            or settings.SUPABASE_ANON_KEY
+            or os.getenv("SUPABASE_ANON_KEY")
+            or os.getenv("SUPABASE_ANON_KEY_TRACK")
+            or os.getenv("SUPABASE_ANON_KEY_COACH")
+            or ""
+        )
 
         if not url or not key or "your_supabase" in url or "your_supabase" in key:
             logger.warning(
                 "Supabase credentials not configured — set SUPABASE_URL, "
                 "SUPABASE_ANON_KEY (and optionally SUPABASE_SERVICE_ROLE_KEY) "
-                "in your .env file. Backend will run with limited functionality."
+                "in your .env file or Railway variables. Backend will run with local fallback functionality."
             )
             return None
 

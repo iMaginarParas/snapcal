@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     # Both share the same Supabase project URL, anon key, service role key,
     # and JWT secret. Schema separation + RLS enforce tenant isolation.
     # ─────────────────────────────────────────────────────────────────────
-    SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
-    SUPABASE_JWT_SECRET: Optional[str] = None  # Dashboard → Settings → API → JWT Secret
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_URL_COACH") or os.getenv("SUPABASE_URL_TRACK") or ""
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY_TRACK") or os.getenv("SUPABASE_ANON_KEY_COACH") or ""
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY_TRACK") or os.getenv("SUPABASE_SERVICE_ROLE_KEY_COACH") or None
+    SUPABASE_JWT_SECRET: Optional[str] = os.getenv("SUPABASE_JWT_SECRET") or os.getenv("JWT_SECRET") or None
 
     # AI Config
     GEMINI_API_KEY: str = ""
