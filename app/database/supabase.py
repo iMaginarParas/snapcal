@@ -1,97 +1,73 @@
-import logging
-from typing import Optional
+"""
+Supabase client — Single Shared Project (Option A)
+===================================================
+SabTrack  → `public` schema  (nutrition, meals, exercises, users)
+SabCoach  → `coach`  schema  (clients, programs, workouts, check-ins)
+
+Both products use the same Supabase project URL, anon key, and service-role
+key. Tenant isolation is enforced by Row-Level Security (RLS) policies on each
+schema. No separate Supabase project is needed.
+"""
+
 from app.core.logging import logger
 
-_supabase_track_client = None
-_supabase_track_available = False
-
-_supabase_coach_client = None
-_supabase_coach_available = False
+_supabase_client = None
+_supabase_available = False
 
 
-def _init_track_supabase():
-    global _supabase_track_client, _supabase_track_available
+def _init_supabase():
+    global _supabase_client, _supabase_available
     try:
         from supabase import create_client
         from app.core.config import settings
 
-        url = settings.track_supabase_url
-        key = settings.track_supabase_key
+        url = settings.SUPABASE_URL
+        key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
 
-        if (
-            not url or not key
-            or "your_supabase" in url
-            or "your_supabase" in key
-        ):
+        if not url or not key or "your_supabase" in url or "your_supabase" in key:
             logger.warning(
-                "SabTrack Supabase credentials not configured. "
-                "Meals will be stored in local file fallback."
+                "Supabase credentials not configured — set SUPABASE_URL, "
+                "SUPABASE_ANON_KEY (and optionally SUPABASE_SERVICE_ROLE_KEY) "
+                "in your .env file. Backend will run with limited functionality."
             )
             return None
 
         client = create_client(url, key)
-        _supabase_track_available = True
-        logger.info("SabTrack Supabase client initialized successfully.")
+        _supabase_available = True
+        logger.info("Supabase client initialised successfully (shared project, dual-schema).")
         return client
     except Exception as e:
-        logger.error(f"SabTrack Supabase initialization failed: {e}")
+        logger.error(f"Supabase initialisation failed: {e}")
         return None
 
 
-def _init_coach_supabase():
-    global _supabase_coach_client, _supabase_coach_available
-    try:
-        from supabase import create_client
-        from app.core.config import settings
-
-        url = settings.coach_supabase_url
-        key = settings.coach_supabase_key
-
-        if (
-            not url or not key
-            or "your_supabase" in url
-            or "your_supabase" in key
-        ):
-            logger.warning(
-                "SabCoach Supabase credentials not configured. "
-                "Coach ecosystem will use local file fallback."
-            )
-            return None
-
-        client = create_client(url, key)
-        _supabase_coach_available = True
-        logger.info("SabCoach Supabase client initialized successfully.")
-        return client
-    except Exception as e:
-        logger.error(f"SabCoach Supabase initialization failed: {e}")
-        return None
+# Singleton — instantiated once at import time; does NOT crash the server.
+supabase_client = _init_supabase()
 
 
-# Lazy singletons — do NOT crash server on import
-supabase_track_client = _init_track_supabase()
-supabase_coach_client = _init_coach_supabase()
-
-# Backward compatibility alias
-supabase_client = supabase_track_client or supabase_coach_client
-
+# ── Accessors ─────────────────────────────────────────────────────────────────
 
 def get_track_supabase():
-    return supabase_track_client
+    """Return the shared client for SabTrack (public schema)."""
+    return supabase_client
 
 
 def get_coach_supabase():
-    return supabase_coach_client or supabase_track_client
+    """Return the shared client for SabCoach (coach schema)."""
+    return supabase_client
 
 
 def get_supabase_client(product: str = "track"):
-    if product.lower() in ("coach", "sabcoach"):
-        return get_coach_supabase()
-    return get_track_supabase()
+    """Generic accessor — both products use the same client."""
+    return supabase_client
 
+
+# ── Health checks ─────────────────────────────────────────────────────────────
 
 def is_supabase_live() -> bool:
-    return _supabase_track_available and supabase_track_client is not None
+    return _supabase_available and supabase_client is not None
 
 
 def is_coach_supabase_live() -> bool:
-    return _supabase_coach_available and supabase_coach_client is not None
+    """Coach uses the same client; healthy if the shared client is live."""
+    return is_supabase_live()

@@ -96,6 +96,19 @@ class CoachRepository:
     def get_clients(self, coach_id: str) -> List[Dict[str, Any]]:
         return self._query_table("coach_clients", coach_id)
 
+    def get_client(self, client_id: str) -> Optional[Dict[str, Any]]:
+        sb = _get_supabase()
+        if sb:
+            try:
+                res = sb.from_("coach_clients").select("*").eq("id", client_id).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception:
+                pass
+        store = _load_store()
+        table_data = store.get("coach_clients", [])
+        return next((x for x in table_data if x.get("id") == client_id), None)
+
     def save_client(self, client: Dict[str, Any]) -> Dict[str, Any]:
         if not client.get("id"):
             client["id"] = f"cl_{int(datetime.utcnow().timestamp() * 1000)}"
@@ -213,5 +226,39 @@ class CoachRepository:
     def delete_automation(self, auto_id: str, coach_id: str) -> bool:
         return self._delete_item("coach_automations", auto_id, coach_id)
 
+    # Products
+    def get_products(self, coach_id: str) -> List[Dict[str, Any]]:
+        return self._query_table("coach_products", coach_id)
+
+    def save_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
+        if not product.get("id"):
+            product["id"] = f"prod_{int(datetime.utcnow().timestamp() * 1000)}"
+        return self._upsert_item("coach_products", product)
+
+    def delete_product(self, product_id: str, coach_id: str) -> bool:
+        return self._delete_item("coach_products", product_id, coach_id)
+
+    # Checkins
+    def get_checkins(self, coach_id: str) -> List[Dict[str, Any]]:
+        return self._query_table("coach_checkins", coach_id)
+
+    def save_checkin(self, checkin: Dict[str, Any]) -> Dict[str, Any]:
+        if not checkin.get("id"):
+            checkin["id"] = f"chk_{int(datetime.utcnow().timestamp() * 1000)}"
+        return self._upsert_item("coach_checkins", checkin)
+
+    def delete_checkin(self, checkin_id: str, coach_id: str) -> bool:
+        return self._delete_item("coach_checkins", checkin_id, coach_id)
+
+    # Messages
+    def get_messages(self, coach_id: str) -> List[Dict[str, Any]]:
+        return self._query_table("coach_messages", coach_id)
+
+    def save_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        if not message.get("id"):
+            message["id"] = f"msg_{int(datetime.utcnow().timestamp() * 1000)}"
+        return self._upsert_item("coach_messages", message)
+
 
 coach_repo = CoachRepository()
+

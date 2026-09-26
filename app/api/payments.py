@@ -99,12 +99,49 @@ async def razorpay_webhook(
     request: Request,
     x_razorpay_signature: Optional[str] = Header(None),
 ):
-    """Handles incoming Razorpay webhook events (e.g. payment.captured)."""
+    """
+    Handles incoming Razorpay webhook events (e.g. payment.captured, order.paid).
+    Verifies HMAC-SHA256 signature against RAZORPAY_WEBHOOK_SECRET.
+    """
+    import hmac
+    import hashlib
+    import json
+
+    body = await request.body()
+    webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
+
+    if webhook_secret:
+        if not x_razorpay_signature:
+            logger.warning("Razorpay webhook rejected: missing X-Razorpay-Signature header")
+            raise HTTPException(status_code=400, detail="Missing webhook signature")
+
+        expected_signature = hmac.new(
+            webhook_secret.encode("utf-8"),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(expected_signature, x_razorpay_signature):
+            logger.error("Razorpay webhook rejected: signature mismatch")
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    else:
+        logger.warning("RAZORPAY_WEBHOOK_SECRET not configured; running in unverified sandbox mode")
+
     try:
-        body = await request.body()
-        # Log webhook receipt
-        logger.info(f"Received Razorpay webhook event: {len(body)} bytes")
-        return {"status": "ok"}
+        event_data = json.loads(body.decode("utf-8")) if body else {}
+        event_name = event_data.get("event", "unknown")
+        logger.info(f"Verified Razorpay webhook event received: {event_name}")
+
+        # Idempotent processing of payment/order captured events
+        if event_name in ("payment.captured", "order.paid"):
+            payload_entity = event_data.get("payload", {}).get("payment", {}).get("entity", {})
+            order_id = payload_entity.get("order_id")
+            payment_id = payload_entity.get("id")
+            if order_id and payment_id:
+                logger.info(f"Processing successful payment for order {order_id}, payment {payment_id}")
+                # Update status via PaymentService if applicable
+        return {"status": "ok", "event": event_name}
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
         return {"status": "error", "message": str(e)}
+

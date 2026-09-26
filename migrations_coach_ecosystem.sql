@@ -168,9 +168,55 @@ CREATE TABLE IF NOT EXISTS public.coach_automations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 12. COACH PRODUCTS TABLE
+CREATE TABLE IF NOT EXISTS public.coach_products (
+    id TEXT PRIMARY KEY,
+    coach_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    currency TEXT DEFAULT 'INR (₹)',
+    duration TEXT,
+    features JSONB DEFAULT '[]'::jsonb,
+    is_active BOOLEAN DEFAULT true,
+    sales_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. COACH CHECKINS TABLE
+CREATE TABLE IF NOT EXISTS public.coach_checkins (
+    id TEXT PRIMARY KEY,
+    coach_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    client_avatar TEXT,
+    date TEXT NOT NULL,
+    status TEXT DEFAULT 'Submitted',
+    metrics JSONB DEFAULT '{}'::jsonb,
+    adherence INTEGER DEFAULT 100,
+    notes TEXT,
+    coach_feedback TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 14. COACH MESSAGES TABLE
+CREATE TABLE IF NOT EXISTS public.coach_messages (
+    id TEXT PRIMARY KEY,
+    coach_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    client_avatar TEXT,
+    last_message TEXT,
+    unread_count INTEGER DEFAULT 0,
+    messages JSONB DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =====================================================================
--- ROW-LEVEL SECURITY (RLS) POLICIES
+-- ROW-LEVEL SECURITY (RLS) POLICIES — MULTI-TENANT ISOLATION
 -- =====================================================================
+-- In production, coaches can ONLY access records belonging to their own coach_id (auth.uid()).
 ALTER TABLE public.coach_clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_workouts ENABLE ROW LEVEL SECURITY;
@@ -182,47 +228,121 @@ ALTER TABLE public.coach_challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_availability ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_automations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coach_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coach_checkins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coach_messages ENABLE ROW LEVEL SECURITY;
 
--- Allow authenticated users to perform all operations on their coach records
 DO $$
 BEGIN
+    -- coach_clients isolation
     DROP POLICY IF EXISTS "coach_clients_all" ON public.coach_clients;
-    CREATE POLICY "coach_clients_all" ON public.coach_clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_clients_all" ON public.coach_clients
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_sessions isolation
     DROP POLICY IF EXISTS "coach_sessions_all" ON public.coach_sessions;
-    CREATE POLICY "coach_sessions_all" ON public.coach_sessions FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_sessions_all" ON public.coach_sessions
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_workouts isolation
     DROP POLICY IF EXISTS "coach_workouts_all" ON public.coach_workouts;
-    CREATE POLICY "coach_workouts_all" ON public.coach_workouts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_workouts_all" ON public.coach_workouts
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_programs isolation
     DROP POLICY IF EXISTS "coach_programs_all" ON public.coach_programs;
-    CREATE POLICY "coach_programs_all" ON public.coach_programs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_programs_all" ON public.coach_programs
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_payments isolation
     DROP POLICY IF EXISTS "coach_payments_all" ON public.coach_payments;
-    CREATE POLICY "coach_payments_all" ON public.coach_payments FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_payments_all" ON public.coach_payments
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_leads isolation
     DROP POLICY IF EXISTS "coach_leads_all" ON public.coach_leads;
-    CREATE POLICY "coach_leads_all" ON public.coach_leads FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_leads_all" ON public.coach_leads
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_groups isolation
     DROP POLICY IF EXISTS "coach_groups_all" ON public.coach_groups;
-    CREATE POLICY "coach_groups_all" ON public.coach_groups FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_groups_all" ON public.coach_groups
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_challenges isolation
     DROP POLICY IF EXISTS "coach_challenges_all" ON public.coach_challenges;
-    CREATE POLICY "coach_challenges_all" ON public.coach_challenges FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_challenges_all" ON public.coach_challenges
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_availability isolation
     DROP POLICY IF EXISTS "coach_availability_all" ON public.coach_availability;
-    CREATE POLICY "coach_availability_all" ON public.coach_availability FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_availability_all" ON public.coach_availability
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_reports isolation
     DROP POLICY IF EXISTS "coach_reports_all" ON public.coach_reports;
-    CREATE POLICY "coach_reports_all" ON public.coach_reports FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_reports_all" ON public.coach_reports
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 
+    -- coach_automations isolation
     DROP POLICY IF EXISTS "coach_automations_all" ON public.coach_automations;
-    CREATE POLICY "coach_automations_all" ON public.coach_automations FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "coach_automations_all" ON public.coach_automations
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
+
+    -- coach_products isolation
+    DROP POLICY IF EXISTS "coach_products_all" ON public.coach_products;
+    CREATE POLICY "coach_products_all" ON public.coach_products
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
+
+    -- coach_checkins isolation
+    DROP POLICY IF EXISTS "coach_checkins_all" ON public.coach_checkins;
+    CREATE POLICY "coach_checkins_all" ON public.coach_checkins
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
+
+    -- coach_messages isolation
+    DROP POLICY IF EXISTS "coach_messages_all" ON public.coach_messages;
+    CREATE POLICY "coach_messages_all" ON public.coach_messages
+        FOR ALL TO authenticated
+        USING (coach_id = auth.uid()::text)
+        WITH CHECK (coach_id = auth.uid()::text);
 END $$;
 
--- Indexes for lightning fast queries
+-- Indexes for lightning fast multi-tenant queries
 CREATE INDEX IF NOT EXISTS idx_coach_clients_coach_id ON public.coach_clients(coach_id);
 CREATE INDEX IF NOT EXISTS idx_coach_sessions_coach_id ON public.coach_sessions(coach_id);
 CREATE INDEX IF NOT EXISTS idx_coach_workouts_coach_id ON public.coach_workouts(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_programs_coach_id ON public.coach_programs(coach_id);
 CREATE INDEX IF NOT EXISTS idx_coach_payments_coach_id ON public.coach_payments(coach_id);
 CREATE INDEX IF NOT EXISTS idx_coach_leads_coach_id ON public.coach_leads(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_groups_coach_id ON public.coach_groups(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_challenges_coach_id ON public.coach_challenges(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_products_coach_id ON public.coach_products(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_checkins_coach_id ON public.coach_checkins(coach_id);
+CREATE INDEX IF NOT EXISTS idx_coach_messages_coach_id ON public.coach_messages(coach_id);
+
