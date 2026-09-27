@@ -1015,7 +1015,9 @@ class DBRepository:
             "title": title,
             "body": body,
             "type": notif_type,
+            "notif_type": notif_type,
             "data": extra_data or {},
+            "extra_data": extra_data or {},
             "is_read": False,
             "created_at": datetime.utcnow().isoformat() + "Z"
         }

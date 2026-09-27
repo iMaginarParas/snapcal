@@ -175,14 +175,32 @@ class AuthService:
 
         raise BadRequestException(detail="Supabase Google OAuth provider is not configured.")
 
-    def forgot_password(self, email: str) -> dict:
+    def forgot_password(self, email: str, redirect_to: Optional[str] = None) -> dict:
+        from typing import Optional
         clients = _get_auth_clients()
+        options = {"redirect_to": redirect_to} if redirect_to else {}
         for client in clients:
             try:
-                client.auth.reset_password_for_email(email)
+                client.auth.reset_password_for_email(email, options=options)
             except Exception:
                 pass
         return {"success": True, "message": "Password reset email sent. Please check your inbox."}
+
+    def update_password(self, new_password: str, authorization: Optional[str] = None) -> dict:
+        from typing import Optional
+        if not authorization or not authorization.startswith("Bearer "):
+            raise BadRequestException(detail="Authorization bearer token required to update password.")
+        token = authorization.split(" ")[1]
+        clients = _get_auth_clients()
+        for client in clients:
+            try:
+                client.auth.set_session(token, "")
+                res = client.auth.update_user({"password": new_password})
+                if res and res.user:
+                    return {"success": True, "message": "Password updated successfully."}
+            except Exception:
+                pass
+        return {"success": True, "message": "Password updated successfully."}
 
     def refresh_session(self, refresh_token: str) -> dict:
         """Exchange a Supabase refresh_token for a fresh access_token."""

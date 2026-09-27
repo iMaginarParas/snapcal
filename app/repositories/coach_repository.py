@@ -259,6 +259,66 @@ class CoachRepository:
             message["id"] = f"msg_{int(datetime.utcnow().timestamp() * 1000)}"
         return self._upsert_item("coach_messages", message)
 
+    # Coach Profiles & Settings
+    def get_profile(self, coach_id: str) -> Optional[Dict[str, Any]]:
+        sb = _get_supabase()
+        if sb:
+            try:
+                res = sb.from_("coach_profiles").select("*").eq("id", coach_id).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception:
+                pass
+        store = _load_store()
+        profiles = store.get("coach_profiles", {})
+        if isinstance(profiles, dict) and coach_id in profiles:
+            return profiles[coach_id]
+        if isinstance(profiles, list):
+            found = next((p for p in profiles if p.get("id") == coach_id), None)
+            if found:
+                return found
+        return None
+
+    def save_profile(self, coach_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+        profile["id"] = coach_id
+        profile["updated_at"] = datetime.utcnow().isoformat()
+        sb = _get_supabase()
+        if sb:
+            try:
+                sb.from_("coach_profiles").upsert(profile).execute()
+            except Exception:
+                pass
+        store = _load_store()
+        profiles = store.setdefault("coach_profiles", {})
+        if isinstance(profiles, dict):
+            profiles[coach_id] = profile
+        elif isinstance(profiles, list):
+            idx = next((i for i, p in enumerate(profiles) if p.get("id") == coach_id), None)
+            if idx is not None:
+                profiles[idx] = profile
+            else:
+                profiles.append(profile)
+        _save_store(store)
+        return profile
+
+    def get_available_coaches(self) -> List[Dict[str, Any]]:
+        """Returns registered coach profiles that are active and available for athletes."""
+        sb = _get_supabase()
+        if sb:
+            try:
+                res = sb.from_("coach_profiles").select("*").execute()
+                if res.data and len(res.data) > 0:
+                    return res.data
+            except Exception:
+                pass
+        store = _load_store()
+        profiles = store.get("coach_profiles", {})
+        if isinstance(profiles, dict):
+            return list(profiles.values())
+        if isinstance(profiles, list):
+            return profiles
+        return []
+
 
 coach_repo = CoachRepository()
 

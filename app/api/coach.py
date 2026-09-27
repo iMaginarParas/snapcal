@@ -559,6 +559,237 @@ def save_coach_program(
     return {"success": True, "data": saved}
 
 
+@router.delete("/programs/{program_id}")
+def delete_coach_program(
+    program_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    cid = _extract_coach_id(authorization)
+    res = coach_repo.delete_program(program_id, cid)
+    return {"success": res}
+
+
+@router.post("/programs/{program_id}/assign")
+def assign_coach_program(
+    program_id: str,
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Assigns a program to one or more clients.
+    - Updates client record in coach_clients with program details.
+    - Dispatches real-time cross-platform in-app notification to each client's SabTrack device.
+    - Records notification for coach activity history.
+    """
+    from datetime import datetime
+    from app.repositories.db_repository import db_repository
+
+    cid = _extract_coach_id(authorization, payload.get("coach_id"))
+    client_ids: List[str] = payload.get("client_ids") or []
+    start_date = payload.get("start_date") or "Next Monday"
+    frequency = payload.get("frequency") or "4 sessions/week"
+
+    # Fetch program
+    all_progs = coach_repo.get_programs(cid)
+    prog = next((p for p in all_progs if str(p.get("id")) == str(program_id)), None)
+    prog_title = (prog.get("title") or prog.get("name") if prog else None) or payload.get("program_name") or "Coaching Program"
+    duration_weeks = (prog.get("duration_weeks") or prog.get("durationWeeks") if prog else 12)
+
+    # Get Coach Profile / Name
+    coach_profile = coach_repo.get_profile(cid)
+    coach_name = (coach_profile.get("name") if coach_profile else None) or payload.get("coach_name") or "Your Coach"
+
+    # Update program enrolled athletes
+    if prog:
+        existing_enrolled = set(prog.get("assignedClientIds") or prog.get("assigned_client_ids") or [])
+        for cl_id in client_ids:
+            existing_enrolled.add(cl_id)
+        prog["assigned_client_ids"] = list(existing_enrolled)
+        prog["assignedClientIds"] = list(existing_enrolled)
+        prog["active_clients_count"] = len(existing_enrolled)
+        prog["activeClientsCount"] = len(existing_enrolled)
+        coach_repo.save_program(prog)
+
+    assigned_clients_updated = []
+    dispatched_notifications = []
+
+    for client_id in client_ids:
+        client = coach_repo.get_client(client_id)
+        if client:
+            client["program_name"] = prog_title
+            client["program_id"] = program_id
+            client["program_detail"] = {
+                "id": program_id,
+                "name": prog_title,
+                "weekCurrent": 1,
+                "weekTotal": duration_weeks,
+                "workoutsThisWeek": f"0 / {frequency.split(' ')[0] if ' ' in frequency else '4'} workouts",
+                "targetSummary": f"Assigned on {datetime.utcnow().strftime('%b %d')}. Starts {start_date}."
+            }
+            # Add to notes
+            notes = client.setdefault("notes", [])
+            notes.insert(0, {
+                "id": f"note_{int(datetime.utcnow().timestamp())}",
+                "text": f"Enrolled into program '{prog_title}' ({duration_weeks} weeks, {frequency}). Starts {start_date}.",
+                "created_at": datetime.utcnow().isoformat(),
+                "author": coach_name
+            })
+            saved_cl = coach_repo.save_client(client)
+            assigned_clients_updated.append(saved_cl)
+
+            # Cross-platform in-app notification to client's SabTrack device
+            st_data = client.get("sabtrack_data") or {}
+            sabtrack_uid = str(st_data.get("sabtrack_user_id") or client.get("id") or "")
+            if sabtrack_uid:
+                try:
+                    notif = db_repository.create_notification(
+                        user_id=sabtrack_uid,
+                        sender_id=cid,
+                        title=f"New Program: {prog_title}",
+                        body=f"Coach {coach_name} assigned you '{prog_title}' ({duration_weeks} weeks, {frequency}). Your training schedule is now active!",
+                        notif_type="program_assigned",
+                        extra_data={
+                            "program_id": program_id,
+                            "program_name": prog_title,
+                            "coach_id": cid,
+                            "coach_name": coach_name,
+                            "start_date": start_date,
+                            "frequency": frequency
+                        }
+                    )
+                    dispatched_notifications.append(notif)
+                except Exception as e:
+                    logger.warning(f"Failed to dispatch program notification to {sabtrack_uid}: {e}")
+
+    # Send coach confirmation notification
+    try:
+        db_repository.create_notification(
+            user_id=cid,
+            sender_id=cid,
+            title="Program Assigned Successfully ✓",
+            body=f"Enrolled {len(client_ids)} athlete(s) into '{prog_title}'. In-app notifications dispatched to their SabTrack app.",
+            notif_type="program_assigned",
+            extra_data={"program_id": program_id, "enrolled_count": len(client_ids)}
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "program_id": program_id,
+        "program_name": prog_title,
+        "assigned_count": len(client_ids),
+        "notifications_dispatched": len(dispatched_notifications),
+        "clients": assigned_clients_updated
+    }
+
+
+@router.post("/programs/{program_id}/share")
+def share_coach_program(
+    program_id: str,
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Generates a shareable program link and dispatches program_shared notifications
+    to any selected clients.
+    """
+    from app.repositories.db_repository import db_repository
+
+    cid = _extract_coach_id(authorization, payload.get("coach_id"))
+    client_ids: List[str] = payload.get("client_ids") or []
+
+    all_progs = coach_repo.get_programs(cid)
+    prog = next((p for p in all_progs if str(p.get("id")) == str(program_id)), None)
+    prog_title = (prog.get("title") or prog.get("name") if prog else None) or "Coaching Program"
+
+    coach_profile = coach_repo.get_profile(cid)
+    coach_name = (coach_profile.get("name") if coach_profile else None) or "Coach"
+
+    share_url = f"https://sabtrack.in/programs/{program_id}"
+
+    notifs_sent = 0
+    for cl_id in client_ids:
+        cl = coach_repo.get_client(cl_id)
+        if cl:
+            st_data = cl.get("sabtrack_data") or {}
+            sabtrack_uid = str(st_data.get("sabtrack_user_id") or cl.get("id") or "")
+            if sabtrack_uid:
+                try:
+                    db_repository.create_notification(
+                        user_id=sabtrack_uid,
+                        sender_id=cid,
+                        title=f"Program Shared: {prog_title}",
+                        body=f"Coach {coach_name} shared the training program '{prog_title}' with you.",
+                        notif_type="program_shared",
+                        extra_data={
+                            "program_id": program_id,
+                            "program_name": prog_title,
+                            "coach_id": cid,
+                            "coach_name": coach_name,
+                            "share_url": share_url
+                        }
+                    )
+                    notifs_sent += 1
+                except Exception:
+                    pass
+
+    return {
+        "success": True,
+        "program_id": program_id,
+        "program_title": prog_title,
+        "share_url": share_url,
+        "notifications_sent": notifs_sent,
+        "message": f"Program share link ready. Sent to {notifs_sent} clients."
+    }
+
+
+# --- Coach Profile & Notifications ---
+@router.get("/profile")
+def get_coach_profile_endpoint(
+    authorization: Optional[str] = Header(None),
+    coach_id: Optional[str] = Query(None)
+):
+    cid = _extract_coach_id(authorization, coach_id)
+    profile = coach_repo.get_profile(cid)
+    if not profile:
+        profile = {
+            "id": cid,
+            "name": "Coach",
+            "title": "Performance & Nutrition Coach",
+            "email": "",
+            "phone": "",
+            "practice_name": "My Coaching Practice",
+            "bio": "Specializing in body recomposition, biomechanics, and data-driven client adherence.",
+            "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
+            "rating": 4.95,
+            "active_clients": len(coach_repo.get_clients(cid))
+        }
+    return {"success": True, "data": profile}
+
+
+@router.post("/profile")
+@router.put("/profile")
+def update_coach_profile_endpoint(
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    cid = _extract_coach_id(authorization, payload.get("coach_id"))
+    saved = coach_repo.save_profile(cid, payload)
+    return {"success": True, "data": saved}
+
+
+@router.get("/notifications")
+def get_coach_notifications(
+    authorization: Optional[str] = Header(None),
+    coach_id: Optional[str] = Query(None)
+):
+    from app.repositories.db_repository import db_repository
+    cid = _extract_coach_id(authorization, coach_id)
+    notifs = db_repository.get_notifications(cid)
+    return {"success": True, "count": len(notifs), "data": notifs}
+
+
 # --- 4. Invoices & Payments ---
 @router.get("/payments")
 def get_coach_payments(
@@ -1184,5 +1415,354 @@ def search_youtube_videos(
         })
 
     return {"success": True, "results": results}
+
+
+# --- 14. SabTrack Client Coaching Integration (My Coach Hub) ---
+
+def _get_demo_prescribed_plan():
+    return {
+        "id": "prescribed_default_protocol",
+        "title": "Hypertrophy & Performance Fuel Protocol",
+        "description": "High-protein, clean-carb nutrient timing optimized for muscle protein synthesis and metabolic recovery.",
+        "total_calories": 2250,
+        "protein_g": 165.0,
+        "carbs_g": 240.0,
+        "fats_g": 65.0,
+        "water_liters": 3.5,
+        "instructions": "Drink 500ml water immediately upon waking. Space meals 3-4 hours apart. Prioritize 35-45g protein in post-training fueling.",
+        "supplements": [
+            "Whey Protein Isolate (1 scoop post-workout)",
+            "Creatine Monohydrate (5g daily with water)",
+            "Omega-3 Fish Oil (2 capsules with breakfast)",
+            "Vitamin D3 + K2 (5000 IU morning)"
+        ],
+        "meals": [
+            {
+                "name": "Power Oats & Whey Bowl",
+                "slot": "Breakfast",
+                "time": "08:30 AM",
+                "calories": 520,
+                "protein": 42.0,
+                "carbs": 64.0,
+                "fats": 12.0,
+                "ingredients": "80g rolled oats, 1 scoop whey isolate, 1 banana, 15g chia seeds, 100ml almond milk",
+                "notes": "Microwave oats in water, stir in protein powder after heating to avoid clumping."
+            },
+            {
+                "name": "Grilled Chicken & Quinoa Fuel Plate",
+                "slot": "Lunch",
+                "time": "01:30 PM",
+                "calories": 680,
+                "protein": 54.0,
+                "carbs": 70.0,
+                "fats": 18.0,
+                "ingredients": "180g grilled chicken breast, 1 cup cooked quinoa, steamed broccoli & asparagus, 1 tsp olive oil",
+                "notes": "Season with rosemary, garlic, and sea salt. Cook in extra-virgin olive oil."
+            },
+            {
+                "name": "Greek Yogurt & Berry Parfait",
+                "slot": "Snack",
+                "time": "05:00 PM",
+                "calories": 340,
+                "protein": 28.0,
+                "carbs": 38.0,
+                "fats": 7.0,
+                "ingredients": "200g Greek yogurt 0% fat, 1/2 cup blueberries, 20g crushed almonds, dash of raw honey",
+                "notes": "Pre-workout fueling slot. Consume 60-90 minutes prior to training session."
+            },
+            {
+                "name": "Salmon Fillet & Roasted Sweet Potato",
+                "slot": "Dinner",
+                "time": "08:30 PM",
+                "calories": 710,
+                "protein": 45.0,
+                "carbs": 68.0,
+                "fats": 24.0,
+                "ingredients": "170g wild salmon fillet, 200g baked sweet potato, large green salad with lemon vinaigrette",
+                "notes": "High omega-3 profile promotes overnight cellular repair and systemic inflammation reduction."
+            }
+        ]
+    }
+
+
+@router.get("/my-coach")
+def get_client_my_coach(
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None)
+):
+    """
+    Called by the SabTrack mobile client to fetch:
+    1. Active Coach Profile and connection status
+    2. Today's coach-prescribed diet plan & supplements (if dispatched)
+    3. Telemetry adherence score & deltas
+    4. Assigned Training Program details
+    5. Feedback messages from the coach
+    """
+    from datetime import datetime
+    from app.repositories.diet_plan_repository import diet_plan_repository
+
+    uid = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            uid = get_current_user_id(authorization)
+        except Exception:
+            pass
+    if not uid:
+        uid = user_id
+
+    target_date = date or datetime.utcnow().strftime("%Y-%m-%d")
+
+    # Search existing clients across coach stores
+    all_clients = []
+    try:
+        from app.repositories.coach_repository import _load_store
+        store = _load_store()
+        all_clients = store.get("coach_clients", [])
+    except Exception:
+        pass
+
+    if not all_clients:
+        all_clients = coach_repo.get_clients("coach_default")
+
+    matched_client = None
+    pending_client = None
+
+    if uid:
+        for c in all_clients:
+            st_data = c.get("sabtrack_data") or {}
+            sab_uid = str(st_data.get("sabtrack_user_id") or "")
+            cid = str(c.get("id") or "")
+            c_status = str(c.get("status") or "")
+
+            if sab_uid == uid or cid == uid:
+                if st_data.get("connected") or c_status == "Active":
+                    matched_client = c
+                    break
+                elif "Pending" in c_status or st_data.get("request_status") == "pending_client_approval":
+                    pending_client = c
+
+    if matched_client:
+        client_id = matched_client.get("id")
+        coach_id = matched_client.get("coach_id") or "coach_default"
+
+        # Load authentic coach profile
+        coach_info = coach_repo.get_profile(coach_id)
+        if not coach_info:
+            coach_name = (
+                matched_client.get("sabtrack_data", {}).get("coach_name")
+                or matched_client.get("assigned_coach")
+                or "Your Coach"
+            )
+            coach_info = {
+                "id": coach_id,
+                "name": coach_name,
+                "title": "Performance & Nutrition Coach",
+                "specialty": matched_client.get("discipline") or "Health & Fitness",
+                "bio": f"Dedicated performance coach on the SabCoach Ecosystem.",
+                "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
+                "rating": 4.95,
+                "active_clients": len(coach_repo.get_clients(coach_id)) or 1,
+                "certifications": ["ISSA Certified", "Precision Nutrition"]
+            }
+
+        # Today's Prescribed Plan (strictly authentic, no fake chicken/quinoa fallback)
+        plan_res = diet_service.get_client_today_plan(client_id, target_date)
+        today_plan = plan_res.get("plan")
+
+        # Assigned Training Program
+        assigned_program = None
+        prog_id = matched_client.get("program_id") or (matched_client.get("program_detail") or {}).get("id")
+        prog_name = matched_client.get("program_name")
+        if prog_id or (prog_name and prog_name not in ("Not Assigned", "Standard Protocol")):
+            all_progs = coach_repo.get_programs(coach_id)
+            matched_prog = next(
+                (p for p in all_progs if str(p.get("id")) == str(prog_id) or p.get("title") == prog_name or p.get("name") == prog_name),
+                None
+            )
+            assigned_program = {
+                "id": prog_id or (matched_prog.get("id") if matched_prog else "prog_active"),
+                "name": prog_name or (matched_prog.get("title") or matched_prog.get("name") if matched_prog else "Training Program"),
+                "detail": matched_client.get("program_detail") or {},
+                "full_program": matched_prog
+            }
+
+        # Telemetry & Adherence
+        telemetry = diet_service.get_client_diet_telemetry(client_id, target_date)
+
+        # Feedbacks
+        feedbacks = diet_plan_repository.get_feedback_for_client(client_id, target_date)
+        if not feedbacks:
+            feedbacks = diet_plan_repository.get_feedback_for_client(client_id)
+
+        # Recent messages
+        all_msgs = coach_repo.get_messages(coach_id)
+        client_msgs = [m for m in all_msgs if m.get("client_id") == client_id]
+        client_msgs.sort(key=lambda x: x.get("created_at", ""))
+
+        return {
+            "success": True,
+            "has_coach": True,
+            "client": matched_client,
+            "coach": coach_info,
+            "today_plan": today_plan,
+            "assigned_program": assigned_program,
+            "adherence": telemetry,
+            "feedbacks": feedbacks or [],
+            "recent_messages": client_msgs[-15:]
+        }
+
+    return {
+        "success": True,
+        "has_coach": False,
+        "pending_invitation": pending_client,
+        "available_coaches": coach_repo.get_available_coaches()
+    }
+
+
+@router.post("/connect-coach")
+def connect_client_to_coach(
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Connects a client to a coach using an invite code (e.g. SAB-424124) or coach ID.
+    Establishes an active real-time connection.
+    """
+    from datetime import datetime
+    from app.repositories.coach_repository import _load_store
+    from app.repositories.db_repository import db_repository
+
+    uid = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            uid = get_current_user_id(authorization)
+        except Exception:
+            pass
+    if not uid:
+        uid = payload.get("user_id") or "usr_sab_001"
+
+    invite_code = (payload.get("invite_code") or "").strip().upper()
+    coach_id = payload.get("coach_id") or "coach_default"
+    client_name = payload.get("name") or "SabTrack Athlete"
+
+    store = _load_store()
+    all_clients = store.get("coach_clients", [])
+    matched = None
+
+    if invite_code:
+        for c in all_clients:
+            if (c.get("invite_code") or "").upper() == invite_code or (c.get("sabtrack_data", {}).get("invite_code") or "").upper() == invite_code:
+                matched = c
+                break
+
+    if matched:
+        matched["status"] = "Active"
+        st = matched.setdefault("sabtrack_data", {})
+        st["connected"] = True
+        st["sabtrack_user_id"] = uid
+        st["connected_at"] = datetime.utcnow().isoformat()
+        saved = coach_repo.save_client(matched)
+        return {
+            "success": True,
+            "message": f"Successfully connected with Coach! Your telemetry is now linked.",
+            "client": saved
+        }
+
+    # If code not found but user is connecting to coach_default or any coach directly:
+    new_client = {
+        "id": f"cl_{int(datetime.utcnow().timestamp() * 1000)}",
+        "coach_id": coach_id,
+        "name": client_name,
+        "email": payload.get("email") or "",
+        "status": "Active",
+        "package": "1:1 Coaching & Nutrition",
+        "goal": payload.get("goal") or "General Health & Body Recomposition",
+        "join_date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "sabtrack_data": {
+            "connected": True,
+            "sabtrack_user_id": uid,
+            "connected_at": datetime.utcnow().isoformat()
+        },
+        "notes": [
+            {
+                "id": f"note_{int(datetime.utcnow().timestamp())}",
+                "text": "Athlete connected via SabTrack mobile client.",
+                "created_at": datetime.utcnow().isoformat(),
+                "author": "System"
+            }
+        ]
+    }
+    saved = coach_repo.save_client(new_client)
+
+    # Dispatched notification to coach
+    try:
+        db_repository.create_notification(
+            user_id=coach_id,
+            sender_id=uid,
+            title="New Athlete Connected! 🏋️",
+            body=f"{client_name} connected to your coaching practice from SabTrack AI.",
+            notif_type="coaching_accepted",
+            extra_data={"client_id": saved["id"]}
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Connected with Coach successfully! Your live diet & workout telemetry is active.",
+        "client": saved
+    }
+
+
+@router.post("/messages/send")
+def send_client_coach_message(
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    from datetime import datetime
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message text cannot be empty")
+
+    coach_id = payload.get("coach_id") or "coach_default"
+    client_id = payload.get("client_id") or "usr_sab_001"
+    sender_name = payload.get("sender_name") or "You"
+
+    msg = {
+        "id": f"msg_{int(datetime.utcnow().timestamp() * 1000)}",
+        "coach_id": coach_id,
+        "client_id": client_id,
+        "sender": "client",
+        "sender_name": sender_name,
+        "text": text,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    saved = coach_repo.save_message(msg)
+    return {"success": True, "data": saved}
+
+
+@router.get("/messages/thread")
+def get_client_coach_thread(
+    client_id: Optional[str] = Query(None),
+    coach_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
+):
+    cid = coach_id or "coach_default"
+    all_msgs = coach_repo.get_messages(cid)
+    
+    target_client = client_id
+    if not target_client and authorization:
+        try:
+            target_client = get_current_user_id(authorization)
+        except Exception:
+            target_client = "usr_sab_001"
+    if not target_client:
+        target_client = "usr_sab_001"
+
+    filtered = [m for m in all_msgs if m.get("client_id") == target_client or m.get("client_id") == "test-c-999"]
+    filtered.sort(key=lambda x: x.get("created_at", ""))
+    return {"success": True, "count": len(filtered), "data": filtered}
+
 
 

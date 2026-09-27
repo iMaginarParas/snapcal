@@ -8,6 +8,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+    redirect_to: Optional[str] = None
+
+class UpdatePasswordRequest(BaseModel):
+    password: str
 
 class RefreshRequest(BaseModel):
     refresh_token: str
@@ -30,7 +34,12 @@ def auth_google_oauth_url(redirect_to: str):
 
 @router.post("/forgot-password")
 def auth_forgot_password(payload: ForgotPasswordRequest):
-    return auth_service.forgot_password(payload.email)
+    return auth_service.forgot_password(payload.email, payload.redirect_to)
+
+@router.post("/reset-password")
+@router.post("/update-password")
+def auth_update_password(payload: UpdatePasswordRequest, authorization: Optional[str] = Header(None)):
+    return auth_service.update_password(payload.password, authorization)
 
 @router.post("/refresh")
 def auth_refresh(payload: RefreshRequest):
