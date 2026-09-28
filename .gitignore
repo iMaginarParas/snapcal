@@ -5,4 +5,5 @@ uploads/
 data/
 __pycache__/
 *.pyc
-
+firebase_service_account.json
+*service_account*.json

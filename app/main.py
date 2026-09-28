@@ -51,12 +51,23 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/.well-known/assetlinks.json")
 def serve_assetlinks():
+    # IMPORTANT: Replace the sha256_cert_fingerprints placeholder below with the
+    # actual SHA-256 fingerprint of your release signing certificate.
+    #
+    # To get it, run one of these:
+    #   keytool -list -v -keystore my-release-key.jks -alias my-key
+    #   OR: Google Play Console → App Signing → App signing key certificate
+    #
+    # Without a valid fingerprint, Android App Links (deep links from email/web)
+    # will NOT be verified and will fall back to the browser instead of the app.
     return [{
         "relation": ["delegate_permission/common.handle_all_urls"],
         "target": {
             "namespace": "android_app",
             "package_name": "com.sabtrack.ai",
-            "sha256_cert_fingerprints": []
+            "sha256_cert_fingerprints": [
+                "31:B1:94:62:A6:23:5E:53:30:2E:59:0B:05:BC:46:DB:51:96:D7:8A:EB:78:26:9D:4B:AD:2B:B3:E3:5A:4B:9C"
+            ]
         }
     }]
 

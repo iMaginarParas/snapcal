@@ -1025,6 +1025,18 @@ class DBRepository:
             self._in_memory_notifications = []
         self._in_memory_notifications.append(payload)
 
+        # Trigger FCM push notification to client device
+        try:
+            from app.services.notifications.fcm_service import send_push_to_user
+            send_push_to_user(
+                user_id=str(user_id),
+                title=title,
+                body=body,
+                data={"notif_id": notif_id, "type": str(notif_type)},
+            )
+        except Exception:
+            pass
+
         try:
             res = supabase_client.from_("notifications").insert(payload).execute()
             if res and res.data:
