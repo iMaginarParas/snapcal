@@ -40,6 +40,27 @@ def _get_supabase():
         return None
 
 
+def _normalize_discipline(coaching_type: str) -> str:
+    """
+    Maps free-text coaching type strings to a canonical discipline bucket.
+    Only coaches with the same bucket are considered exclusive per client.
+    """
+    ct = (coaching_type or "").lower().strip()
+    if any(k in ct for k in ["fitness", "strength", "sport", "conditioning", "athletic", "personal train", "hypertrophy", "bodybuilding", "powerlifting", "weightlifting"]):
+        return "Fitness & Strength"
+    if any(k in ct for k in ["nutrition", "diet", "dietitian", "meal plan", "food coach", "macro"]):
+        return "Nutrition & Dietetics"
+    if any(k in ct for k in ["yoga", "pilates", "mobility", "stretch", "flexibility", "movement"]):
+        return "Yoga & Mobility"
+    if any(k in ct for k in ["mental", "mindset", "wellness", "stress", "psychology", "life coach"]):
+        return "Wellness & Mindset"
+    if any(k in ct for k in ["physio", "rehab", "injury", "recovery", "therapy", "physiotherapy"]):
+        return "Physio & Rehab"
+    if any(k in ct for k in ["cardio", "endurance", "marathon", "running", "cycling", "triathlon", "swim"]):
+        return "Cardio & Endurance"
+    return ct or "General"
+
+
 class CoachRepository:
     # --- Generic Table Helpers ---
     def _query_table(self, table: str, coach_id: str) -> List[Dict[str, Any]]:
@@ -95,6 +116,65 @@ class CoachRepository:
     # Clients
     def get_clients(self, coach_id: str) -> List[Dict[str, Any]]:
         return self._query_table("coach_clients", coach_id)
+
+    def get_all_clients(self) -> List[Dict[str, Any]]:
+        """Return all client records across all coaches (for cross-coach conflict checking)."""
+        sb = _get_supabase()
+        if sb:
+            try:
+                res = sb.from_("coach_clients").select("*").execute()
+                if res.data is not None:
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Supabase get_all_clients failed: {e}")
+        store = _load_store()
+        return store.get("coach_clients", [])
+
+    def find_client_coach_conflict(
+        self,
+        email: str,
+        phone: str,
+        incoming_discipline: str,
+        requesting_coach_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Checks if a client (matched by email or phone) is already assigned to a different
+        coach with the SAME discipline. Returns the conflicting record if found, else None.
+        Cross-coach discipline exclusivity: one fitness coach per client, one nutrition coach
+        per client, etc. A client CAN have coaches of different disciplines simultaneously.
+        """
+        norm_email = (email or "").lower().strip()
+        norm_phone = "".join(c for c in (phone or "") if c.isdigit())
+        incoming_disc = _normalize_discipline(incoming_discipline)
+
+        all_clients = self.get_all_clients()
+        for client in all_clients:
+            # Skip records belonging to the requesting coach (same-coach dup already handled)
+            if client.get("coach_id") == requesting_coach_id:
+                continue
+
+            # Match by email or phone
+            client_email = (client.get("email") or "").lower().strip()
+            client_phone = "".join(c for c in (client.get("phone") or "") if c.isdigit())
+            email_match = norm_email and norm_email != "client@example.com" and client_email == norm_email
+            phone_match = len(norm_phone) >= 8 and client_phone == norm_phone
+
+            if not (email_match or phone_match):
+                continue
+
+            # Check if the OTHER coach's discipline is the same
+            existing_discipline = _normalize_discipline(
+                client.get("coaching_type") or client.get("package") or ""
+            )
+            if existing_discipline and existing_discipline == incoming_discipline:
+                return {
+                    "conflict": True,
+                    "client_name": client.get("name", "Unknown"),
+                    "existing_coach_id": client.get("coach_id"),
+                    "existing_discipline": existing_discipline,
+                    "message": f"This client already has a {existing_discipline} coach."
+                }
+        return None
 
     def get_client(self, client_id: str) -> Optional[Dict[str, Any]]:
         sb = _get_supabase()

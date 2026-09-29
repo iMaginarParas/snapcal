@@ -3,8 +3,11 @@ import json
 import logging
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, Header
 from typing import Optional, List, Dict, Any
+from datetime import datetime
 from app.schemas.diet_plans import CoachMealFeedbackRequest
 from app.services.diet.diet_service import diet_service
+from app.services.health.steps_service import steps_service
+from app.repositories.db_repository import db_repository
 from app.repositories.coach_repository import coach_repo
 from app.core.dependencies import get_current_user_id
 
@@ -67,13 +70,14 @@ def get_coach_clients(
         telemetry = diet_service.get_client_diet_telemetry(c["id"])
         prescribed = telemetry.get("prescribed") or {}
         actual = telemetry.get("actual") or {}
+        adh_pct = telemetry.get("adherence_percentage")
         enhanced.append({
             **c,
             "active_plan_title": prescribed.get("title") or "High Protein Protocol",
             "prescribed_calories": prescribed.get("calories") or c.get("target_cals", 2000),
             "actual_calories": actual.get("calories") or 0,
-            "adherence_percentage": telemetry.get("adherence_percentage") or 88.0,
-            "adherence_status": telemetry.get("status") or "On Track",
+            "adherence_percentage": adh_pct if adh_pct is not None else 0.0,
+            "adherence_status": telemetry.get("status") or ("No Meals Logged Yet" if actual.get("calories", 0) == 0 else "On Track"),
             "meals_logged_today": actual.get("meal_count") or 0
         })
 
@@ -260,6 +264,33 @@ def send_coaching_request(
     client_email = payload.get("email") or ""
     coach_name = payload.get("coach_name") or "Your Coach"
     client_id = f"cl_{int(datetime.utcnow().timestamp() * 1000)}"
+    coaching_type = payload.get("coaching_type") or "1:1 Coaching"
+
+    # ─── Cross-Coach Discipline Exclusivity Guard ───────────────────────────────
+    # Rule: one coach per discipline per client. A client CAN have a fitness coach
+    # AND a nutrition coach simultaneously — but NOT two fitness coaches.
+    try:
+        conflict = coach_repo.find_client_coach_conflict(
+            email=client_email,
+            phone=payload.get("phone") or "",
+            incoming_discipline=coaching_type,
+            requesting_coach_id=cid
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "conflict": True,
+                    "reason": "discipline_exclusivity",
+                    "discipline": conflict.get("existing_discipline"),
+                    "message": f"{client_name} already has a {conflict.get('existing_discipline', 'same-discipline')} coach. A client can only have one coach per discipline."
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Discipline conflict check failed (non-blocking): {e}")
+    # ───────────────────────────────────────────────────────────────────────────
 
     client_record = {
         "id": client_id,
@@ -1051,10 +1082,42 @@ def save_coach_message(
 def get_client_telemetry(client_id: str, date: Optional[str] = Query(None)):
     """
     Real-time telemetric inspection for coaches:
-    Shows prescribed diet plan vs actual meals logged in SabTrack with macro breakdown and adherence.
+    Shows prescribed diet plan vs actual meals logged in SabTrack with macro breakdown,
+    continuous steps, step history, recent workouts, and daily stats.
     """
-    telemetry = diet_service.get_client_diet_telemetry(client_id, date)
-    return {"success": True, "data": telemetry}
+    target_date = date or datetime.utcnow().strftime("%Y-%m-%d")
+    diet_telemetry = diet_service.get_client_diet_telemetry(client_id, target_date)
+    
+    # Real steps telemetry
+    daily_steps_res = steps_service.get_daily_steps(client_id, target_date)
+    steps_data = daily_steps_res.get("data") or {}
+    
+    # Real 7d and 30d steps history
+    history_7d = steps_service.get_steps_history(client_id, days=7).get("data") or []
+    history_30d = steps_service.get_steps_history(client_id, days=30).get("data") or []
+    
+    # Real logged workouts
+    try:
+        from app.services.workouts.workout_service import workout_service
+        workouts_res = workout_service.get_workouts(client_id, page=1, limit=10)
+        recent_workouts = workouts_res.get("data") or []
+    except Exception:
+        recent_workouts = []
+        
+    # Real daily stats
+    daily_stats = db_repository.get_daily_stats(client_id, target_date) or {}
+    
+    return {
+        "success": True,
+        "data": {
+            **diet_telemetry,
+            "steps": steps_data,
+            "history_7d": history_7d,
+            "history_30d": history_30d,
+            "daily_stats": daily_stats,
+            "recent_workouts": recent_workouts
+        }
+    }
 
 
 @router.post("/client/{client_id}/feedback")

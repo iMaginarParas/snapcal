@@ -1,3 +1,4 @@
+from typing import Optional
 from app.schemas.auth import SignupRequest, LoginRequest, GoogleLoginRequest
 from app.core.exceptions import BadRequestException
 from app.database.supabase import get_track_supabase, get_coach_supabase, supabase_client

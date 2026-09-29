@@ -5,13 +5,23 @@ from app.database.supabase import supabase_client
 class StepsRepository:
     def get_steps_by_date(self, user_id: str, date_str: str) -> Optional[Dict[str, Any]]:
         """Retrieves daily step counts for a user on a specific date."""
-        res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
-        return res.data if res else None
+        if not supabase_client:
+            return None
+        try:
+            res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
+            return res.data if res else None
+        except Exception:
+            return None
 
     def get_steps_history(self, user_id: str, start_date_str: str, end_date_str: str) -> List[Dict[str, Any]]:
         """Retrieves steps history for a date range."""
-        res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).gte("date", start_date_str).lte("date", end_date_str).order("date", desc=False).execute()
-        return res.data if res else []
+        if not supabase_client:
+            return []
+        try:
+            res = supabase_client.from_("daily_steps").select("*").eq("user_id", user_id).gte("date", start_date_str).lte("date", end_date_str).order("date", desc=False).execute()
+            return res.data if res else []
+        except Exception:
+            return []
 
     def sync_steps(self, user_id: str, sync_data: Dict[str, Any]) -> Dict[str, Any]:
         """
