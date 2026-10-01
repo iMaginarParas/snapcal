@@ -36,6 +36,33 @@ class DietService:
         data = payload.dict()
         self._recalculate_totals_if_needed(data)
         dispatch = diet_plan_repository.send_daily_diet_plan(data)
+
+        # FCM push + in-app notification to athlete (non-blocking)
+        try:
+            from app.services.notifications.fcm_service import send_push_to_user
+            from app.repositories.db_repository import db_repository
+            athlete_id = str(payload.client_id)
+            plan_title = payload.title or "Today's Nutrition Protocol"
+            cal_str = f"{int(payload.total_calories)} kcal" if payload.total_calories else ""
+            notif_body = f"Your coach dispatched {plan_title}" + (f" \u00b7 {cal_str}" if cal_str else "")
+            send_push_to_user(
+                user_id=athlete_id,
+                title="\U0001f4cb New Meal Plan Dispatched",
+                body=notif_body,
+                data={"type": "program_assigned", "screen": "my_coach", "plan_date": str(payload.target_date)}
+            )
+            db_repository.create_notification(
+                user_id=athlete_id,
+                sender_id="coach",
+                title="\U0001f4cb New Meal Plan from Coach",
+                body=notif_body,
+                notif_type="program_assigned",
+                extra_data={"plan_date": str(payload.target_date), "calories": int(payload.total_calories or 0), "client_id": athlete_id}
+            )
+        except Exception as _notif_err:
+            import logging
+            logging.getLogger(__name__).warning(f"Diet dispatch notification failed (non-blocking): {_notif_err}")
+
         return {
             "success": True,
             "message": f"Daily diet plan successfully dispatched to client {payload.client_id} for {payload.target_date}",

@@ -78,25 +78,26 @@ class CoachRepository:
         return [item for item in table_data if item.get("coach_id") == coach_id]
 
     def _upsert_item(self, table: str, item: Dict[str, Any]) -> Dict[str, Any]:
+        saved_item = item
         sb = _get_supabase()
         if sb:
             try:
                 res = sb.from_(table).upsert(item).execute()
                 if res.data and len(res.data) > 0:
-                    return res.data[0]
+                    saved_item = res.data[0]
             except Exception as e:
                 logger.warning(f"Supabase upsert failed for {table}: {e}")
 
         store = _load_store()
         table_data = store.setdefault(table, [])
-        item_id = item.get("id")
+        item_id = saved_item.get("id")
         existing_idx = next((i for i, x in enumerate(table_data) if x.get("id") == item_id), None)
         if existing_idx is not None:
-            table_data[existing_idx] = {**table_data[existing_idx], **item}
+            table_data[existing_idx] = {**table_data[existing_idx], **saved_item}
         else:
-            table_data.insert(0, item)
+            table_data.insert(0, saved_item)
         _save_store(store)
-        return item
+        return saved_item
 
     def _delete_item(self, table: str, item_id: str, coach_id: str) -> bool:
         sb = _get_supabase()

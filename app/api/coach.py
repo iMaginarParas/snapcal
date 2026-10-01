@@ -262,9 +262,41 @@ def send_coaching_request(
     sabtrack_user_id = str(payload.get("sabtrack_user_id") or payload.get("user_id") or f"usr_{int(datetime.utcnow().timestamp())}")
     client_name = payload.get("name") or "SabTrack Athlete"
     client_email = payload.get("email") or ""
+    client_phone = payload.get("phone") or ""
     coach_name = payload.get("coach_name") or "Your Coach"
     client_id = f"cl_{int(datetime.utcnow().timestamp() * 1000)}"
     coaching_type = payload.get("coaching_type") or "1:1 Coaching"
+
+    # ─── Self-coaching guard ────────────────────────────────────────────────────
+    # A coach cannot send a coaching request to their own SabTrack account.
+    # Compare by sabtrack_user_id (same UID on SabTrack) first, then fall back
+    # to email/phone matching against the coach's own stored profile.
+    try:
+        coach_profile = coach_repo.get_profile(cid) or {}
+        coach_email_self = (coach_profile.get("email") or "").lower().strip()
+        coach_phone_self = "".join(filter(str.isdigit, coach_profile.get("phone") or ""))
+        client_email_norm = client_email.lower().strip()
+        client_phone_norm = "".join(filter(str.isdigit, client_phone))
+
+        is_self = (
+            sabtrack_user_id == cid
+            or (coach_email_self and coach_email_self == client_email_norm)
+            or (len(coach_phone_self) >= 8 and coach_phone_self == client_phone_norm)
+        )
+        if is_self:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "self_request": True,
+                    "message": "You cannot send a coaching request to your own account."
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Self-coaching guard check failed (non-blocking): {e}")
+    # ───────────────────────────────────────────────────────────────────────────
+
 
     # ─── Cross-Coach Discipline Exclusivity Guard ───────────────────────────────
     # Rule: one coach per discipline per client. A client CAN have a fitness coach
@@ -291,6 +323,17 @@ def send_coaching_request(
     except Exception as e:
         logger.warning(f"Discipline conflict check failed (non-blocking): {e}")
     # ───────────────────────────────────────────────────────────────────────────
+
+    # Check if this coach already has a record for this client to avoid orphaned duplicate rows
+    all_clients = coach_repo.get_all_clients()
+    for c in all_clients:
+        if c.get("coach_id") == cid:
+            c_st = c.get("sabtrack_data") or {}
+            c_uid = str(c_st.get("sabtrack_user_id") or "")
+            c_email = (c.get("email") or "").lower().strip()
+            if (sabtrack_user_id and c_uid == sabtrack_user_id) or (client_email and c_email and c_email == client_email.lower().strip()):
+                client_id = c.get("id", client_id)
+                break
 
     client_record = {
         "id": client_id,
@@ -374,6 +417,13 @@ def respond_coaching_request(
     accept = payload.get("accept", True)
     client = coach_repo.get_client(client_id)
 
+    caller_uid = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            caller_uid = get_current_user_id(authorization)
+        except Exception:
+            pass
+
     if not client:
         # Fallback create active client if simulated
         client = {
@@ -384,8 +434,10 @@ def respond_coaching_request(
             "status": "Active" if accept else "Declined",
             "sabtrack_data": {
                 "connected": accept,
+                "sabtrack_user_id": caller_uid or payload.get("user_id") or "usr_sab_001",
                 "request_status": "accepted" if accept else "declined",
-                "accepted_at": datetime.utcnow().isoformat()
+                "accepted_at": datetime.utcnow().isoformat() if accept else None,
+                "responded_at": datetime.utcnow().isoformat()
             }
         }
     else:
@@ -393,6 +445,8 @@ def respond_coaching_request(
         st_data["connected"] = bool(accept)
         st_data["request_status"] = "accepted" if accept else "declined"
         st_data["responded_at"] = datetime.utcnow().isoformat()
+        if caller_uid and not st_data.get("sabtrack_user_id"):
+            st_data["sabtrack_user_id"] = caller_uid
         if accept:
             st_data["accepted_at"] = datetime.utcnow().isoformat()
             client["status"] = "Active"
@@ -401,6 +455,41 @@ def respond_coaching_request(
         client["sabtrack_data"] = st_data
 
     saved = coach_repo.save_client(client)
+
+    athlete_uid = client.get("sabtrack_data", {}).get("sabtrack_user_id") or caller_uid
+    athlete_email = (client.get("email") or "").lower().strip()
+    coach_id = client.get("coach_id") or "coach_default"
+
+    # Synchronize any other records for this user and coach
+    if accept and (athlete_uid or athlete_email):
+        try:
+            all_clients = coach_repo.get_all_clients()
+            for other_c in all_clients:
+                if other_c.get("id") == client_id:
+                    continue
+                o_st = other_c.get("sabtrack_data") or {}
+                o_uid = str(o_st.get("sabtrack_user_id") or "")
+                o_email = (other_c.get("email") or "").lower().strip()
+                same_user = (athlete_uid and o_uid == str(athlete_uid)) or (athlete_email and o_email and o_email == athlete_email)
+                if same_user and other_c.get("coach_id") == coach_id:
+                    if "Pending" in (other_c.get("status") or "") or o_st.get("request_status") == "pending_client_approval":
+                        other_c["status"] = "Active"
+                        o_st["connected"] = True
+                        o_st["request_status"] = "accepted"
+                        other_c["sabtrack_data"] = o_st
+                        coach_repo.save_client(other_c)
+        except Exception as e:
+            logger.warning(f"Failed to clean duplicate pending records: {e}")
+
+    # Resolve notification for athlete device so invitation card doesn't linger
+    try:
+        db_repository.resolve_coaching_request_notification(
+            client_id=client_id,
+            accepted=accept,
+            athlete_id=athlete_uid
+        )
+    except Exception as e:
+        logger.warning(f"Failed to resolve coaching request notification: {e}")
 
     if accept:
         # Send confirmation notification to coach
@@ -875,6 +964,43 @@ def delete_coach_lead(
     return {"success": res}
 
 
+@router.post("/leads/{lead_id}/convert")
+def convert_coach_lead(
+    lead_id: str,
+    payload: Dict[str, Any] = Body(default={}),
+    authorization: Optional[str] = Header(None)
+):
+    """Converts a CRM lead into an active coaching client in one click."""
+    cid = _extract_coach_id(authorization)
+    leads = coach_repo.get_leads(cid)
+    lead = next((l for l in leads if str(l.get("id")) == str(lead_id)), None)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+
+    lead["stage"] = "Converted"
+    lead["converted_at"] = datetime.utcnow().isoformat()
+    coach_repo.save_lead(lead)
+
+    new_client = {
+        "id": f"cl_{int(datetime.utcnow().timestamp() * 1000)}",
+        "coach_id": cid,
+        "name": lead.get("name") or lead.get("fullName") or "New Client",
+        "email": lead.get("email") or "",
+        "phone": lead.get("phone") or "",
+        "goal": lead.get("goal") or payload.get("goal") or "General Fitness",
+        "status": "Active",
+        "joined_date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "adherence": 100,
+        "notes": f"Converted from lead on {datetime.utcnow().strftime('%Y-%m-%d')}. Source: {lead.get('source', 'Direct')}",
+        "sabtrack": {
+            "connected": bool(lead.get("sabtrack_user_id")),
+            "userId": lead.get("sabtrack_user_id") or ""
+        }
+    }
+    saved_client = coach_repo.save_client(new_client)
+    return {"success": True, "data": {"lead": lead, "client": saved_client}}
+
+
 # --- 6. Community Groups & Challenges ---
 @router.get("/groups")
 def get_coach_groups(
@@ -1116,6 +1242,101 @@ def get_client_telemetry(client_id: str, date: Optional[str] = Query(None)):
             "history_30d": history_30d,
             "daily_stats": daily_stats,
             "recent_workouts": recent_workouts
+        }
+    }
+
+
+@router.get("/telemetry/overview")
+def get_telemetry_overview(
+    authorization: Optional[str] = Header(None),
+    coach_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None)
+):
+    """
+    Returns aggregate live SabTrack telemetry across all clients for the coach.
+    """
+    cid = _extract_coach_id(authorization, coach_id)
+    target_date = date or datetime.utcnow().strftime("%Y-%m-%d")
+    clients = coach_repo.get_clients(cid)
+
+    client_telemetries = []
+    total_steps = 0
+    clients_tracking_steps = 0
+    total_adherence = 0
+    adh_count = 0
+
+    for c in clients:
+        c_id = str(c.get("id"))
+        sabtrack_info = c.get("sabtrack") or {}
+        linked_user_id = sabtrack_info.get("userId") or c_id
+
+        # Steps
+        steps_val = 0
+        try:
+            steps_res = steps_service.get_daily_steps(linked_user_id, target_date)
+            steps_val = (steps_res.get("data") or {}).get("final_steps") or 0
+        except Exception:
+            steps_val = 0
+
+        if steps_val > 0:
+            total_steps += steps_val
+            clients_tracking_steps += 1
+
+        # Diet telemetry
+        diet_data = {}
+        try:
+            diet_data = diet_service.get_client_diet_telemetry(linked_user_id, target_date)
+        except Exception:
+            diet_data = {}
+
+        adh_pct = diet_data.get("adherence_percentage")
+        if isinstance(adh_pct, (int, float)) and adh_pct > 0:
+            total_adherence += adh_pct
+            adh_count += 1
+        elif isinstance(c.get("adherence"), (int, float)) and c.get("adherence", 0) > 0:
+            total_adherence += c["adherence"]
+            adh_count += 1
+
+        # Daily stats
+        try:
+            d_stats = db_repository.get_daily_stats(linked_user_id, target_date) or {}
+        except Exception:
+            d_stats = {}
+
+        client_telemetries.append({
+            "client_id": c_id,
+            "name": c.get("name", "Unknown"),
+            "avatar": c.get("avatar"),
+            "status": c.get("status", "Active"),
+            "adherence": adh_pct or c.get("adherence") or 0,
+            "steps": steps_val,
+            "steps_goal": 10000,
+            "calories_actual": (diet_data.get("actual") or {}).get("calories", 0),
+            "calories_target": (diet_data.get("prescribed") or {}).get("calories", 2000),
+            "water_ml": d_stats.get("water_ml", 0),
+            "sleep_minutes": d_stats.get("sleep_minutes", 0),
+            "sleep_score": d_stats.get("sleep_score", 0),
+            "stress_level": d_stats.get("stress_level", 0),
+            "last_sync": target_date,
+            "connected": sabtrack_info.get("connected", True)
+        })
+
+    avg_steps = round(total_steps / max(clients_tracking_steps, 1)) if clients_tracking_steps > 0 else 0
+    avg_adherence = round(total_adherence / max(adh_count, 1)) if adh_count > 0 else 0
+    on_track_count = sum(1 for c in client_telemetries if (c["adherence"] >= 80 or c["steps"] >= 8000))
+    attention_count = sum(1 for c in client_telemetries if (c["adherence"] < 60 or c["status"] in ("Needs Attention", "At Risk")))
+
+    return {
+        "success": True,
+        "data": {
+            "date": target_date,
+            "total_clients": len(clients),
+            "active_tracking_count": clients_tracking_steps,
+            "avg_steps": avg_steps,
+            "avg_adherence": avg_adherence,
+            "on_track_count": on_track_count,
+            "attention_count": attention_count,
+            "clients": client_telemetries
         }
     }
 
@@ -1577,14 +1798,7 @@ def get_client_my_coach(
     target_date = date or datetime.utcnow().strftime("%Y-%m-%d")
 
     # Search existing clients across coach stores
-    all_clients = []
-    try:
-        from app.repositories.coach_repository import _load_store
-        store = _load_store()
-        all_clients = store.get("coach_clients", [])
-    except Exception:
-        pass
-
+    all_clients = coach_repo.get_all_clients()
     if not all_clients:
         all_clients = coach_repo.get_clients("coach_default")
 
@@ -1603,7 +1817,8 @@ def get_client_my_coach(
                     matched_client = c
                     break
                 elif "Pending" in c_status or st_data.get("request_status") == "pending_client_approval":
-                    pending_client = c
+                    if not pending_client:
+                        pending_client = c
 
     if matched_client:
         client_id = matched_client.get("id")
@@ -1666,6 +1881,7 @@ def get_client_my_coach(
         return {
             "success": True,
             "has_coach": True,
+            "pending_invitation": None,
             "client": matched_client,
             "coach": coach_info,
             "today_plan": today_plan,
@@ -1829,3 +2045,119 @@ def get_client_coach_thread(
 
 
 
+
+
+# Analytics Summary
+@router.get("/analytics/summary")
+def get_analytics_summary(
+    authorization=Header(None),
+    coach_id=Query(None)
+):
+    """Returns real practice KPIs and 6-month revenue history."""
+    from datetime import datetime, timedelta
+    cid = _extract_coach_id(authorization, coach_id)
+    clients = coach_repo.get_clients(cid)
+    payments = coach_repo.get_payments(cid)
+    sessions = coach_repo.get_sessions(cid)
+    checkins = coach_repo.get_checkins(cid)
+    active_clients = [c for c in clients if (c.get("status") or "").lower() not in ("inactive", "paused", "declined")]
+    total_collected = sum(p.get("amount", 0) for p in payments if p.get("status") == "Paid")
+    pending_amount = sum(p.get("amount", 0) for p in payments if p.get("status") in ("Pending", "Overdue"))
+    overdue_amount = sum(p.get("amount", 0) for p in payments if p.get("status") == "Overdue")
+    adh_vals = [c.get("adherence", 0) for c in clients if isinstance(c.get("adherence"), (int, float)) and c.get("adherence", 0) > 0]
+    avg_adherence = round(sum(adh_vals) / len(adh_vals)) if adh_vals else 0
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    today_sessions = [s for s in sessions if s.get("date") in (today_str, "Today")]
+    pending_checkins = [c for c in checkins if c.get("status") in ("Submitted", "Pending")]
+    attention = [c for c in clients if (c.get("status") or "").lower() in ("needs attention", "at risk")]
+    retention_rate = round(len(active_clients) / max(len(clients), 1) * 100)
+    now = datetime.utcnow()
+    revenue_history = []
+    for i in range(5, -1, -1):
+        try:
+            month_dt = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        except Exception:
+            month_dt = now
+        month_key = month_dt.strftime("%Y-%m")
+        month_name = month_dt.strftime("%b")
+        month_total = sum(
+            p.get("amount", 0) for p in payments
+            if p.get("status") == "Paid" and str(p.get("paidDate") or p.get("date") or p.get("created_at") or "").startswith(month_key)
+        )
+        revenue_history.append({"month": month_name, "amount": month_total})
+    return {
+        "success": True,
+        "data": {
+            "active_clients": len(active_clients),
+            "total_clients": len(clients),
+            "total_collected": total_collected,
+            "pending_amount": pending_amount,
+            "overdue_amount": overdue_amount,
+            "avg_adherence": avg_adherence,
+            "today_sessions": len(today_sessions),
+            "pending_checkins": len(pending_checkins),
+            "attention_count": len(attention),
+            "retention_rate": retention_rate,
+            "revenue_history": revenue_history,
+        }
+    }
+
+
+@router.get("/settings/notifications")
+def get_notification_preferences(authorization=Header(None), coach_id=Query(None)):
+    cid = _extract_coach_id(authorization, coach_id)
+    try:
+        profile = coach_repo.get_profile(cid) or {}
+        return {"success": True, "data": profile.get("notification_preferences") or {}}
+    except Exception:
+        return {"success": True, "data": {}}
+
+
+@router.put("/settings/notifications")
+def update_notification_preferences(payload: Dict[str, Any] = Body(...), authorization=Header(None), coach_id=Query(None)):
+    cid = _extract_coach_id(authorization, coach_id)
+    try:
+        profile = coach_repo.get_profile(cid) or {"id": cid}
+        profile["notification_preferences"] = payload
+        coach_repo.save_profile(profile)
+        return {"success": True, "data": payload}
+    except Exception as e:
+        logger.warning(f"Notification prefs save error: {e}")
+        return {"success": True, "data": payload}
+
+
+@router.post("/programs/{program_id}/clone")
+def clone_program(program_id: str, payload: Dict[str, Any] = Body(default={}), authorization=Header(None), coach_id=Query(None)):
+    import copy, time as _t
+    cid = _extract_coach_id(authorization, coach_id)
+    programs = coach_repo.get_programs(cid)
+    original = next((p for p in programs if str(p.get("id")) == str(program_id)), None)
+    if not original:
+        raise HTTPException(status_code=404, detail=f"Program {program_id} not found.")
+    cloned = copy.deepcopy(original)
+    cloned["id"] = f"prog_{int(_t.time() * 1000)}"
+    cloned["name"] = payload.get("title") or f"{original.get('name') or original.get('title', 'Program')} (Copy)"
+    cloned["title"] = cloned["name"]
+    cloned["created_at"] = datetime.utcnow().isoformat()
+    cloned["updated_at"] = datetime.utcnow().isoformat()
+    cloned["coach_id"] = cid
+    cloned["assigned_clients"] = []
+    cloned["assigned_count"] = 0
+    saved = coach_repo.save_program(cloned)
+    return {"success": True, "data": saved, "message": f"Cloned as '{cloned['name']}'."}
+
+
+@router.post("/messages/{message_id}/read")
+def mark_message_thread_read(message_id: str, authorization=Header(None), coach_id=Query(None)):
+    cid = _extract_coach_id(authorization, coach_id)
+    try:
+        messages = coach_repo.get_messages(cid)
+        for m in messages:
+            if str(m.get("id")) == str(message_id) or str(m.get("client_id")) == str(message_id):
+                m["read_by_coach"] = True
+                m["unread_count"] = 0
+                coach_repo.save_message(m)
+        return {"success": True, "message": "Thread marked as read."}
+    except Exception as e:
+        logger.warning(f"mark_message_thread_read failed: {e}")
+        return {"success": True}

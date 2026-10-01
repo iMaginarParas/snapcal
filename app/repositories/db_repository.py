@@ -1079,5 +1079,58 @@ class DBRepository:
                 n["is_read"] = True
         return True
 
+    def resolve_coaching_request_notification(self, client_id: str, accepted: bool, athlete_id: Optional[str] = None):
+        """
+        Marks coaching_request notifications matching client_id as resolved (accepted/declined)
+        and read, updating both in-memory store and Supabase.
+        """
+        new_type = "coaching_accepted" if accepted else "coaching_declined"
+        status_str = "accepted" if accepted else "declined"
+        
+        for n in getattr(self, "_in_memory_notifications", []):
+            extra = n.get("extra_data") or n.get("data") or {}
+            c_id = extra.get("client_id")
+            u_id = str(n.get("user_id") or "")
+            if (c_id and str(c_id) == str(client_id)) or (athlete_id and u_id == str(athlete_id) and n.get("type") == "coaching_request"):
+                n["is_read"] = True
+                n["type"] = new_type
+                n["notif_type"] = new_type
+                if isinstance(n.get("extra_data"), dict):
+                    n["extra_data"]["status"] = status_str
+                    n["extra_data"]["responded"] = True
+                if isinstance(n.get("data"), dict):
+                    n["data"]["status"] = status_str
+                    n["data"]["responded"] = True
+                if accepted:
+                    n["title"] = "Coaching Request Accepted ✓"
+                    n["body"] = "You are now connected with your Coach. Continuous telemetry is active."
+
+        try:
+            update_payload = {
+                "is_read": True,
+                "type": new_type,
+                "notif_type": new_type,
+                "extra_data": {
+                    "status": status_str,
+                    "responded": True,
+                    "client_id": client_id
+                }
+            }
+            if athlete_id:
+                # Filter by athlete user_id + coaching_request type
+                supabase_client.from_("notifications").update(update_payload).eq(
+                    "user_id", str(athlete_id)
+                ).eq("notif_type", "coaching_request").execute()
+            elif client_id:
+                # Fallback: filter by client_id inside extra_data (JSONB path)
+                try:
+                    supabase_client.from_("notifications").update(update_payload).eq(
+                        "notif_type", "coaching_request"
+                    ).contains("extra_data", {"client_id": str(client_id)}).execute()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
 db_repository = DBRepository()
 
