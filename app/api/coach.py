@@ -418,11 +418,31 @@ def respond_coaching_request(
     client = coach_repo.get_client(client_id)
 
     caller_uid = None
+    caller_email = (payload.get("email") or "").lower().strip() or None
+
     if authorization and authorization.startswith("Bearer "):
         try:
             caller_uid = get_current_user_id(authorization)
         except Exception:
             pass
+        try:
+            token = extract_token(authorization)
+            parts = token.split(".")
+            if len(parts) >= 2:
+                import base64, json
+                padded = parts[1] + "=" * (-len(parts[1]) % 4)
+                token_payload = json.loads(base64.urlsafe_b64decode(padded))
+                if not caller_email:
+                    caller_email = (token_payload.get("email") or "").lower().strip() or None
+                if not caller_uid:
+                    caller_uid = token_payload.get("sub") or token_payload.get("user_id") or token_payload.get("id")
+        except Exception:
+            pass
+
+    if not caller_uid:
+        caller_uid = payload.get("user_id") or payload.get("sabtrack_user_id")
+
+    athlete_uid = caller_uid or "usr_sab_001"
 
     if not client:
         # Fallback create active client if simulated
@@ -430,11 +450,12 @@ def respond_coaching_request(
             "id": client_id,
             "coach_id": _extract_coach_id(authorization, payload.get("coach_id")),
             "name": payload.get("name", "SabTrack Athlete"),
-            "email": payload.get("email", ""),
+            "email": caller_email or payload.get("email", ""),
+            "user_id": athlete_uid,
             "status": "Active" if accept else "Declined",
             "sabtrack_data": {
                 "connected": accept,
-                "sabtrack_user_id": caller_uid or payload.get("user_id") or "usr_sab_001",
+                "sabtrack_user_id": athlete_uid,
                 "request_status": "accepted" if accept else "declined",
                 "accepted_at": datetime.utcnow().isoformat() if accept else None,
                 "responded_at": datetime.utcnow().isoformat()
@@ -445,8 +466,11 @@ def respond_coaching_request(
         st_data["connected"] = bool(accept)
         st_data["request_status"] = "accepted" if accept else "declined"
         st_data["responded_at"] = datetime.utcnow().isoformat()
-        if caller_uid and not st_data.get("sabtrack_user_id"):
-            st_data["sabtrack_user_id"] = caller_uid
+        if caller_uid:
+            st_data["sabtrack_user_id"] = str(caller_uid)
+            client["user_id"] = str(caller_uid)
+        if caller_email:
+            client["email"] = caller_email
         if accept:
             st_data["accepted_at"] = datetime.utcnow().isoformat()
             client["status"] = "Active"
@@ -457,7 +481,7 @@ def respond_coaching_request(
     saved = coach_repo.save_client(client)
 
     athlete_uid = client.get("sabtrack_data", {}).get("sabtrack_user_id") or caller_uid
-    athlete_email = (client.get("email") or "").lower().strip()
+    athlete_email = (client.get("email") or caller_email or "").lower().strip()
     coach_id = client.get("coach_id") or "coach_default"
 
     # Synchronize any other records for this user and coach
@@ -476,6 +500,9 @@ def respond_coaching_request(
                         other_c["status"] = "Active"
                         o_st["connected"] = True
                         o_st["request_status"] = "accepted"
+                        if athlete_uid:
+                            o_st["sabtrack_user_id"] = str(athlete_uid)
+                            other_c["user_id"] = str(athlete_uid)
                         other_c["sabtrack_data"] = o_st
                         coach_repo.save_client(other_c)
         except Exception as e:
@@ -1773,6 +1800,7 @@ def _get_demo_prescribed_plan():
 def get_client_my_coach(
     authorization: Optional[str] = Header(None),
     user_id: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
     date: Optional[str] = Query(None)
 ):
     """
@@ -1787,11 +1815,27 @@ def get_client_my_coach(
     from app.repositories.diet_plan_repository import diet_plan_repository
 
     uid = None
+    user_email = (email or "").lower().strip() or None
+
     if authorization and authorization.startswith("Bearer "):
         try:
             uid = get_current_user_id(authorization)
         except Exception:
             pass
+        try:
+            token = extract_token(authorization)
+            parts = token.split(".")
+            if len(parts) >= 2:
+                import base64, json
+                padded = parts[1] + "=" * (-len(parts[1]) % 4)
+                token_payload = json.loads(base64.urlsafe_b64decode(padded))
+                if not user_email:
+                    user_email = (token_payload.get("email") or "").lower().strip() or None
+                if not uid:
+                    uid = token_payload.get("sub") or token_payload.get("user_id") or token_payload.get("id")
+        except Exception:
+            pass
+
     if not uid:
         uid = user_id
 
@@ -1805,18 +1849,32 @@ def get_client_my_coach(
     matched_client = None
     pending_client = None
 
-    if uid:
+    if uid or user_email:
         for c in all_clients:
             st_data = c.get("sabtrack_data") or {}
             sab_uid = str(st_data.get("sabtrack_user_id") or "")
             cid = str(c.get("id") or "")
+            c_uid = str(c.get("user_id") or "")
             c_status = str(c.get("status") or "")
+            c_email = (c.get("email") or "").lower().strip()
+            st_email = (st_data.get("email") or "").lower().strip()
 
-            if sab_uid == uid or cid == uid:
-                if st_data.get("connected") or c_status == "Active":
+            is_match = False
+            if uid and (sab_uid == str(uid) or cid == str(uid) or c_uid == str(uid)):
+                is_match = True
+            elif user_email and (c_email == user_email or st_email == user_email):
+                is_match = True
+
+            if is_match:
+                is_active = (
+                    st_data.get("connected") is True
+                    or c_status.lower() == "active"
+                    or st_data.get("request_status") == "accepted"
+                )
+                if is_active:
                     matched_client = c
                     break
-                elif "Pending" in c_status or st_data.get("request_status") == "pending_client_approval":
+                elif "pending" in c_status.lower() or st_data.get("request_status") == "pending_client_approval":
                     if not pending_client:
                         pending_client = c
 
