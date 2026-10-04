@@ -400,6 +400,31 @@ class CoachRepository:
             return profiles
         return []
 
+    def get_recommended_coaches(self, limit: int = 3) -> List[Dict[str, Any]]:
+        """Returns recommended coaches of distinct disciplines/types."""
+        all_coaches = self.get_available_coaches()
+        if not all_coaches:
+            return []
+
+        seen_disciplines = set()
+        recommended = []
+        for c in all_coaches:
+            disc = _normalize_discipline(c.get("specialty") or c.get("discipline") or c.get("title") or "")
+            if disc not in seen_disciplines:
+                seen_disciplines.add(disc)
+                recommended.append(c)
+                if len(recommended) >= limit:
+                    break
+
+        if len(recommended) < limit:
+            for c in all_coaches:
+                if c not in recommended:
+                    recommended.append(c)
+                    if len(recommended) >= limit:
+                        break
+
+        return recommended
+
 
 coach_repo = CoachRepository()
 

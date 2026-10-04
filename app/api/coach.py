@@ -10,6 +10,7 @@ from app.services.health.steps_service import steps_service
 from app.repositories.db_repository import db_repository
 from app.repositories.coach_repository import coach_repo
 from app.core.dependencies import get_current_user_id
+from app.core.security import extract_token
 
 logger = logging.getLogger(__name__)
 
@@ -466,7 +467,7 @@ def respond_coaching_request(
         st_data["connected"] = bool(accept)
         st_data["request_status"] = "accepted" if accept else "declined"
         st_data["responded_at"] = datetime.utcnow().isoformat()
-        if caller_uid:
+        if caller_uid and caller_uid != client.get("coach_id"):
             st_data["sabtrack_user_id"] = str(caller_uid)
             client["user_id"] = str(caller_uid)
         if caller_email:
@@ -532,9 +533,11 @@ def respond_coaching_request(
         except Exception:
             pass
 
+    coach_info = coach_repo.get_profile(saved.get("coach_id", "coach_default"))
     return {
         "success": True,
         "client": saved,
+        "coach": coach_info,
         "status": saved.get("status"),
         "message": f"Client request {'accepted! Active connection established.' if accept else 'declined.'}"
     }
@@ -559,6 +562,40 @@ def invite_sabtrack_client(
     timestamp = int(datetime.utcnow().timestamp())
     invite_code = f"SAB-{timestamp % 1000000:06d}"
     invite_link = f"https://sabtrack.in/join?coach_id={cid}&code={invite_code}"
+
+    # Deduplicate against existing client records for this coach to prevent duplicate invitations
+    if client_email:
+        existing_clients = coach_repo.get_clients(cid)
+        for ec in existing_clients:
+            if (ec.get("email") or "").lower().strip() == client_email.lower().strip():
+                existing_code = ec.get("invite_code") or (ec.get("sabtrack_data") or {}).get("invite_code")
+                if existing_code:
+                    return {
+                        "success": True,
+                        "data": {
+                            **ec,
+                            "invite_code": existing_code,
+                            "invite_link": ec.get("invite_link") or f"https://sabtrack.in/join?coach_id={cid}&code={existing_code}",
+                            "already_exists": True
+                        }
+                    }
+                else:
+                    ec["invite_code"] = invite_code
+                    ec["invite_link"] = invite_link
+                    ec_st = ec.setdefault("sabtrack_data", {})
+                    ec_st["invite_code"] = invite_code
+                    ec_st["invite_link"] = invite_link
+                    ec_st["invite_status"] = "Invitation Dispatched"
+                    ec_st["invited_at"] = datetime.utcnow().isoformat()
+                    saved = coach_repo.save_client(ec)
+                    return {
+                        "success": True,
+                        "data": {
+                            **saved,
+                            "invite_code": invite_code,
+                            "invite_link": invite_link
+                        }
+                    }
 
     record = {
         "id": f"cl_inv_{timestamp}",
@@ -1801,12 +1838,14 @@ def get_client_my_coach(
     authorization: Optional[str] = Header(None),
     user_id: Optional[str] = Query(None),
     email: Optional[str] = Query(None),
-    date: Optional[str] = Query(None)
+    date: Optional[str] = Query(None),
+    coach_id: Optional[str] = Query(None),
+    client_id: Optional[str] = Query(None)
 ):
     """
     Called by the SabTrack mobile client to fetch:
-    1. Active Coach Profile and connection status
-    2. Today's coach-prescribed diet plan & supplements (if dispatched)
+    1. Active Coach Profiles (support for multiple coaches per athlete)
+    2. Today's coach-prescribed diet plan & supplements
     3. Telemetry adherence score & deltas
     4. Assigned Training Program details
     5. Feedback messages from the coach
@@ -1846,114 +1885,207 @@ def get_client_my_coach(
     if not all_clients:
         all_clients = coach_repo.get_clients("coach_default")
 
-    matched_client = None
+    matched_clients = []
     pending_client = None
 
-    if uid or user_email:
+    def _is_client_match(c):
+        st_data = c.get("sabtrack_data") or {}
+        sab_uid = str(st_data.get("sabtrack_user_id") or "")
+        cid_val = str(c.get("id") or "")
+        c_uid = str(c.get("user_id") or "")
+        c_email = (c.get("email") or "").lower().strip()
+        st_email = (st_data.get("email") or "").lower().strip()
+
+        if client_id and (cid_val == str(client_id)):
+            return True
+        if uid and (sab_uid == str(uid) or cid_val == str(uid) or c_uid == str(uid)):
+            return True
+        if user_email and (c_email == user_email or st_email == user_email):
+            return True
+        return False
+
+    for c in all_clients:
+        st_data = c.get("sabtrack_data") or {}
+        c_status = str(c.get("status") or "")
+        is_active = (
+            st_data.get("connected") is True
+            or c_status.lower() == "active"
+            or st_data.get("request_status") == "accepted"
+        )
+        if _is_client_match(c):
+            if is_active:
+                if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
+                    matched_clients.append(c)
+            elif "pending" in c_status.lower() or st_data.get("request_status") == "pending_client_approval":
+                if not pending_client:
+                    pending_client = c
+
+    # Fallback in dev/demo ONLY if caller is completely unauthenticated and didn't provide any user identity
+    if not matched_clients and not pending_client and not uid and not user_email and not client_id and os.getenv("APP_ENV") != "production":
         for c in all_clients:
             st_data = c.get("sabtrack_data") or {}
-            sab_uid = str(st_data.get("sabtrack_user_id") or "")
-            cid = str(c.get("id") or "")
-            c_uid = str(c.get("user_id") or "")
             c_status = str(c.get("status") or "")
-            c_email = (c.get("email") or "").lower().strip()
-            st_email = (st_data.get("email") or "").lower().strip()
+            is_active = (
+                st_data.get("connected") is True
+                or c_status.lower() == "active"
+                or st_data.get("request_status") == "accepted"
+            )
+            sab_uid = str(st_data.get("sabtrack_user_id") or "")
+            c_uid = str(c.get("user_id") or "")
+            if is_active and (sab_uid in ("usr_sab_001", "usr_athlete_e2e") or c_uid in ("usr_sab_001", "usr_athlete_e2e")):
+                if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
+                    matched_clients.append(c)
 
-            is_match = False
-            if uid and (sab_uid == str(uid) or cid == str(uid) or c_uid == str(uid)):
-                is_match = True
-            elif user_email and (c_email == user_email or st_email == user_email):
-                is_match = True
-
-            if is_match:
-                is_active = (
-                    st_data.get("connected") is True
-                    or c_status.lower() == "active"
-                    or st_data.get("request_status") == "accepted"
-                )
-                if is_active:
-                    matched_client = c
+    if matched_clients:
+        selected_client = matched_clients[0]
+        if coach_id:
+            for mc in matched_clients:
+                if str(mc.get("coach_id")) == str(coach_id):
+                    selected_client = mc
                     break
-                elif "pending" in c_status.lower() or st_data.get("request_status") == "pending_client_approval":
-                    if not pending_client:
-                        pending_client = c
+        elif client_id:
+            for mc in matched_clients:
+                if str(mc.get("id")) == str(client_id):
+                    selected_client = mc
+                    break
 
-    if matched_client:
-        client_id = matched_client.get("id")
-        coach_id = matched_client.get("coach_id") or "coach_default"
+        coaches_list = []
+        for mc in matched_clients:
+            mc_cid = mc.get("id")
+            mc_coach_id = mc.get("coach_id") or "coach_default"
+            c_info = coach_repo.get_profile(mc_coach_id)
+            if not c_info:
+                c_name = (
+                    mc.get("sabtrack_data", {}).get("coach_name")
+                    or mc.get("assigned_coach")
+                    or "Your Coach"
+                )
+                c_discipline = mc.get("coaching_type") or mc.get("discipline") or "Health & Fitness"
+                c_info = {
+                    "id": mc_coach_id,
+                    "name": c_name,
+                    "title": f"{c_discipline} Coach",
+                    "specialty": c_discipline,
+                    "bio": "Dedicated performance coach on the SabCoach Ecosystem.",
+                    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
+                    "rating": 4.95,
+                    "active_clients": len(coach_repo.get_clients(mc_coach_id)) or 1,
+                    "certifications": ["ISSA Certified", "Precision Nutrition"]
+                }
+            
+            mc_plan_res = diet_service.get_client_today_plan(mc_cid, target_date)
+            mc_today_plan = mc_plan_res.get("plan")
 
-        # Load authentic coach profile
-        coach_info = coach_repo.get_profile(coach_id)
-        if not coach_info:
-            coach_name = (
-                matched_client.get("sabtrack_data", {}).get("coach_name")
-                or matched_client.get("assigned_coach")
-                or "Your Coach"
-            )
-            coach_info = {
-                "id": coach_id,
-                "name": coach_name,
-                "title": "Performance & Nutrition Coach",
-                "specialty": matched_client.get("discipline") or "Health & Fitness",
-                "bio": f"Dedicated performance coach on the SabCoach Ecosystem.",
-                "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
-                "rating": 4.95,
-                "active_clients": len(coach_repo.get_clients(coach_id)) or 1,
-                "certifications": ["ISSA Certified", "Precision Nutrition"]
-            }
+            mc_assigned_program = None
+            mc_prog_id = mc.get("program_id") or (mc.get("program_detail") or {}).get("id")
+            mc_prog_name = mc.get("program_name")
+            if mc_prog_id or (mc_prog_name and mc_prog_name not in ("Not Assigned", "Standard Protocol")):
+                all_progs = coach_repo.get_programs(mc_coach_id)
+                mc_matched_prog = next(
+                    (p for p in all_progs if str(p.get("id")) == str(mc_prog_id) or p.get("title") == mc_prog_name or p.get("name") == mc_prog_name),
+                    None
+                )
+                mc_assigned_program = {
+                    "id": mc_prog_id or (mc_matched_prog.get("id") if mc_matched_prog else "prog_active"),
+                    "name": mc_prog_name or (mc_matched_prog.get("title") or mc_matched_prog.get("name") if mc_matched_prog else "Training Program"),
+                    "detail": mc.get("program_detail") or {},
+                    "full_program": mc_matched_prog
+                }
 
-        # Today's Prescribed Plan (strictly authentic, no fake chicken/quinoa fallback)
-        plan_res = diet_service.get_client_today_plan(client_id, target_date)
-        today_plan = plan_res.get("plan")
+            mc_telemetry = diet_service.get_client_diet_telemetry(mc_cid, target_date)
+            mc_feedbacks = diet_plan_repository.get_feedback_for_client(mc_cid, target_date) or diet_plan_repository.get_feedback_for_client(mc_cid)
+            mc_all_msgs = coach_repo.get_messages(mc_coach_id)
+            mc_client_msgs = [m for m in mc_all_msgs if m.get("client_id") == mc_cid]
+            mc_client_msgs.sort(key=lambda x: x.get("created_at", ""))
 
-        # Assigned Training Program
-        assigned_program = None
-        prog_id = matched_client.get("program_id") or (matched_client.get("program_detail") or {}).get("id")
-        prog_name = matched_client.get("program_name")
-        if prog_id or (prog_name and prog_name not in ("Not Assigned", "Standard Protocol")):
-            all_progs = coach_repo.get_programs(coach_id)
-            matched_prog = next(
-                (p for p in all_progs if str(p.get("id")) == str(prog_id) or p.get("title") == prog_name or p.get("name") == prog_name),
-                None
-            )
-            assigned_program = {
-                "id": prog_id or (matched_prog.get("id") if matched_prog else "prog_active"),
-                "name": prog_name or (matched_prog.get("title") or matched_prog.get("name") if matched_prog else "Training Program"),
-                "detail": matched_client.get("program_detail") or {},
-                "full_program": matched_prog
-            }
+            coaches_list.append({
+                "coach_id": mc_coach_id,
+                "client_id": mc_cid,
+                "coach": c_info,
+                "client": mc,
+                "today_plan": mc_today_plan,
+                "assigned_program": mc_assigned_program,
+                "adherence": mc_telemetry,
+                "feedbacks": mc_feedbacks or [],
+                "recent_messages": mc_client_msgs[-15:],
+                "discipline": c_info.get("specialty") or mc.get("coaching_type") or "General Fitness"
+            })
 
-        # Telemetry & Adherence
-        telemetry = diet_service.get_client_diet_telemetry(client_id, target_date)
-
-        # Feedbacks
-        feedbacks = diet_plan_repository.get_feedback_for_client(client_id, target_date)
-        if not feedbacks:
-            feedbacks = diet_plan_repository.get_feedback_for_client(client_id)
-
-        # Recent messages
-        all_msgs = coach_repo.get_messages(coach_id)
-        client_msgs = [m for m in all_msgs if m.get("client_id") == client_id]
-        client_msgs.sort(key=lambda x: x.get("created_at", ""))
+        selected_bundle = next((b for b in coaches_list if b["client"]["id"] == selected_client.get("id")), coaches_list[0])
 
         return {
             "success": True,
             "has_coach": True,
+            "selected_coach_id": selected_bundle["coach_id"],
+            "selected_client_id": selected_bundle["client_id"],
+            "coaches": coaches_list,
             "pending_invitation": None,
-            "client": matched_client,
-            "coach": coach_info,
-            "today_plan": today_plan,
-            "assigned_program": assigned_program,
-            "adherence": telemetry,
-            "feedbacks": feedbacks or [],
-            "recent_messages": client_msgs[-15:]
+            "client": selected_bundle["client"],
+            "coach": selected_bundle["coach"],
+            "today_plan": selected_bundle["today_plan"],
+            "assigned_program": selected_bundle["assigned_program"],
+            "adherence": selected_bundle["adherence"],
+            "feedbacks": selected_bundle["feedbacks"],
+            "recent_messages": selected_bundle["recent_messages"],
+            "available_coaches": coach_repo.get_available_coaches(),
+            "recommended_coaches": coach_repo.get_recommended_coaches(3)
         }
 
     return {
         "success": True,
         "has_coach": False,
+        "coaches": [],
         "pending_invitation": pending_client,
-        "available_coaches": coach_repo.get_available_coaches()
+        "available_coaches": coach_repo.get_available_coaches(),
+        "recommended_coaches": coach_repo.get_recommended_coaches(3)
+    }
+
+
+@router.get("/coaches")
+def get_available_coaches_endpoint(
+    q: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    discipline: Optional[str] = Query(None)
+):
+    """
+    Search and filter available coaches by keyword/name, location, and discipline.
+    Also returns 3 recommended coaches of distinct types.
+    """
+    all_coaches = coach_repo.get_available_coaches()
+    recommended = coach_repo.get_recommended_coaches(3)
+    filtered = all_coaches
+
+    if q:
+        ql = q.lower().strip()
+        filtered = [
+            c for c in filtered
+            if ql in (c.get("name") or "").lower()
+            or ql in (c.get("specialty") or "").lower()
+            or ql in (c.get("discipline") or "").lower()
+            or ql in (c.get("title") or "").lower()
+            or ql in (c.get("bio") or "").lower()
+        ]
+    if location and location.lower().strip() not in ("all", "all locations"):
+        loc_l = location.lower().strip()
+        filtered = [
+            c for c in filtered
+            if loc_l in (c.get("location") or "").lower()
+            or loc_l in (c.get("location_type") or "").lower()
+        ]
+    if discipline and discipline.lower().strip() not in ("all", "all disciplines", "all types"):
+        disc_l = discipline.lower().strip()
+        filtered = [
+            c for c in filtered
+            if disc_l in (c.get("specialty") or "").lower()
+            or disc_l in (c.get("discipline") or "").lower()
+            or disc_l in (c.get("title") or "").lower()
+        ]
+
+    return {
+        "success": True,
+        "coaches": filtered,
+        "recommended_coaches": recommended,
+        "total": len(filtered)
     }
 
 
@@ -1963,11 +2095,10 @@ def connect_client_to_coach(
     authorization: Optional[str] = Header(None)
 ):
     """
-    Connects a client to a coach using an invite code (e.g. SAB-424124) or coach ID.
+    Connects a client to a coach using coach ID or invite code.
     Establishes an active real-time connection.
     """
     from datetime import datetime
-    from app.repositories.coach_repository import _load_store
     from app.repositories.db_repository import db_repository
 
     uid = None
@@ -1977,77 +2108,125 @@ def connect_client_to_coach(
         except Exception:
             pass
     if not uid:
-        uid = payload.get("user_id") or "usr_sab_001"
+        uid = payload.get("user_id")
 
     invite_code = (payload.get("invite_code") or "").strip().upper()
     coach_id = payload.get("coach_id") or "coach_default"
     client_name = payload.get("name") or "SabTrack Athlete"
+    client_email = (payload.get("email") or "").lower().strip()
 
-    store = _load_store()
-    all_clients = store.get("coach_clients", [])
+    all_clients = coach_repo.get_all_clients()
     matched = None
 
     if invite_code:
         for c in all_clients:
             if (c.get("invite_code") or "").upper() == invite_code or (c.get("sabtrack_data", {}).get("invite_code") or "").upper() == invite_code:
                 matched = c
+                coach_id = c.get("coach_id") or coach_id
                 break
+
+    # If no invite code match, check if there's an existing record for this user and coach
+    if not matched:
+        for c in all_clients:
+            if str(c.get("coach_id")) == str(coach_id):
+                c_st = c.get("sabtrack_data") or {}
+                c_uid = str(c_st.get("sabtrack_user_id") or c.get("user_id") or "")
+                c_email = (c.get("email") or "").lower().strip()
+                if (uid and c_uid == str(uid)) or (client_email and c_email and c_email == client_email):
+                    matched = c
+                    break
+
+    coach_profile = coach_repo.get_profile(coach_id) or {}
+    coach_name = coach_profile.get("name") or "Coach"
+    coach_disc = coach_profile.get("specialty") or coach_profile.get("discipline") or "Performance Coaching"
 
     if matched:
         matched["status"] = "Active"
         st = matched.setdefault("sabtrack_data", {})
         st["connected"] = True
-        st["sabtrack_user_id"] = uid
+        st["request_status"] = "accepted"
+        if uid:
+            st["sabtrack_user_id"] = str(uid)
+            matched["user_id"] = str(uid)
+        if client_email and not matched.get("email"):
+            matched["email"] = client_email
+        if client_name and (not matched.get("name") or matched.get("name") in ("SabTrack Athlete", "New Athlete")):
+            matched["name"] = client_name
+        st["coach_name"] = coach_name
         st["connected_at"] = datetime.utcnow().isoformat()
         saved = coach_repo.save_client(matched)
-        return {
-            "success": True,
-            "message": f"Successfully connected with Coach! Your telemetry is now linked.",
-            "client": saved
+    else:
+        new_client = {
+            "id": f"cl_{int(datetime.utcnow().timestamp() * 1000)}",
+            "coach_id": coach_id,
+            "user_id": uid or f"usr_{int(datetime.utcnow().timestamp())}",
+            "name": client_name,
+            "email": client_email,
+            "status": "Active",
+            "package": f"1:1 {coach_disc}",
+            "goal": payload.get("goal") or "General Health & Body Recomposition",
+            "join_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "coaching_type": coach_disc,
+            "discipline": coach_disc,
+            "sabtrack_data": {
+                "connected": True,
+                "coach_name": coach_name,
+                "sabtrack_user_id": uid or f"usr_{int(datetime.utcnow().timestamp())}",
+                "connected_at": datetime.utcnow().isoformat()
+            },
+            "notes": [
+                {
+                    "id": f"note_{int(datetime.utcnow().timestamp())}",
+                    "text": f"Athlete connected directly to {coach_name} via SabTrack mobile client.",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "author": "System"
+                }
+            ]
         }
+        saved = coach_repo.save_client(new_client)
 
-    # If code not found but user is connecting to coach_default or any coach directly:
-    new_client = {
-        "id": f"cl_{int(datetime.utcnow().timestamp() * 1000)}",
-        "coach_id": coach_id,
-        "name": client_name,
-        "email": payload.get("email") or "",
-        "status": "Active",
-        "package": "1:1 Coaching & Nutrition",
-        "goal": payload.get("goal") or "General Health & Body Recomposition",
-        "join_date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "sabtrack_data": {
-            "connected": True,
-            "sabtrack_user_id": uid,
-            "connected_at": datetime.utcnow().isoformat()
-        },
-        "notes": [
-            {
-                "id": f"note_{int(datetime.utcnow().timestamp())}",
-                "text": "Athlete connected via SabTrack mobile client.",
-                "created_at": datetime.utcnow().isoformat(),
-                "author": "System"
-            }
-        ]
-    }
-    saved = coach_repo.save_client(new_client)
+    athlete_uid = str(saved.get("sabtrack_data", {}).get("sabtrack_user_id") or saved.get("user_id") or uid or "")
 
     # Dispatched notification to coach
     try:
         db_repository.create_notification(
             user_id=coach_id,
-            sender_id=uid,
+            sender_id=athlete_uid,
             title="New Athlete Connected! 🏋️",
             body=f"{client_name} connected to your coaching practice from SabTrack AI.",
             notif_type="coaching_accepted",
-            extra_data={"client_id": saved["id"]}
+            extra_data={"client_id": saved["id"], "is_coach": True}
         )
     except Exception:
         pass
 
+    # Dispatched notification to athlete
+    if athlete_uid:
+        try:
+            db_repository.create_notification(
+                user_id=athlete_uid,
+                sender_id=coach_id,
+                title=f"Connected with {coach_name}! 🏋️",
+                body=f"You are now linked with {coach_name} ({coach_disc}). Your live telemetry streams to their dashboard.",
+                notif_type="coaching_accepted",
+                extra_data={"coach_id": coach_id, "client_id": saved["id"], "is_coach": True}
+            )
+        except Exception:
+            pass
+
+        # Resolve any lingering coaching request notifications
+        try:
+            db_repository.resolve_coaching_request_notification(
+                client_id=saved["id"],
+                accepted=True,
+                athlete_id=athlete_uid
+            )
+        except Exception:
+            pass
+
     return {
         "success": True,
-        "message": "Connected with Coach successfully! Your live diet & workout telemetry is active.",
+        "message": f"Connected with {coach_name} successfully! Your live diet & workout telemetry is active.",
         "client": saved
     }
 
