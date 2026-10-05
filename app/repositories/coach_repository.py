@@ -6,17 +6,119 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-_STORE_FILE = os.path.join(os.path.dirname(__file__), "../../../data/coach_ecosystem.json")
+_DEFAULT_COACHES = [
+    {
+        "id": "coach_default",
+        "name": "Coach Sunil Kumar",
+        "title": "Chief Strength & Conditioning Coach",
+        "discipline": "Strength & Conditioning",
+        "specialty": "Fitness & Strength",
+        "location": "Bangalore, IN",
+        "location_type": "In-Person / Hybrid",
+        "rating": 4.97,
+        "clients_count": 210,
+        "invite_code": "SAB-SUNIL",
+        "bio": "Master coach with 12+ years optimizing hypertrophy, strength biomechanics, and athlete body recomposition.",
+        "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300"
+    },
+    {
+        "id": "coach_marcus_vance",
+        "name": "Dr. Marcus Vance",
+        "title": "Lead Performance Nutritionist",
+        "discipline": "Nutrition & Dietetics",
+        "specialty": "Nutrition & Dietetics",
+        "location": "New York, NY",
+        "location_type": "Remote / Online",
+        "rating": 4.96,
+        "clients_count": 142,
+        "invite_code": "SAB-VANCE",
+        "bio": "Ph.D. in Human Bioenergetics. Specializes in metabolic flexibility, precision macronutrient cycling, and competition prep.",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300"
+    },
+    {
+        "id": "coach_priya_sharma",
+        "name": "Coach Priya Sharma",
+        "title": "Mobility & Structural Recovery Coach",
+        "discipline": "Yoga & Mobility",
+        "specialty": "Yoga & Mobility",
+        "location": "Austin, TX",
+        "location_type": "In-Person / Hybrid",
+        "rating": 4.98,
+        "clients_count": 98,
+        "invite_code": "SAB-PRIYA",
+        "bio": "Former national gymnast and movement specialist. Focused on joint longevity, functional range conditioning, and breathwork.",
+        "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300"
+    },
+    {
+        "id": "coach_david_chen",
+        "name": "Coach David Chen",
+        "title": "Aerobic Capacity & Endurance Specialist",
+        "discipline": "Cardio & Endurance",
+        "specialty": "Cardio & Endurance",
+        "location": "Boulder, CO",
+        "location_type": "Remote / Online",
+        "rating": 4.93,
+        "clients_count": 116,
+        "invite_code": "SAB-DAVID",
+        "bio": "Ultra-marathoner and physiology coach. Specializes in VO2 max optimization, heart-rate zone training, and lactate clearance.",
+        "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"
+    },
+    {
+        "id": "coach_elena_rostova",
+        "name": "Dr. Elena Rostova",
+        "title": "Corrective Exercise & Rehab Director",
+        "discipline": "Physio & Rehab",
+        "specialty": "Physio & Rehab",
+        "location": "Chicago, IL",
+        "location_type": "In-Person / Hybrid",
+        "rating": 4.99,
+        "clients_count": 87,
+        "invite_code": "SAB-ELENA",
+        "bio": "Doctor of Physical Therapy. Focuses on post-injury kinetic retraining, spine mechanics, and return-to-sport protocols.",
+        "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300"
+    },
+    {
+        "id": "coach_test_pro",
+        "name": "Coach Samantha Ray",
+        "title": "Olympic Lifting & Functional Hypertrophy",
+        "discipline": "Strength & Conditioning",
+        "specialty": "Olympic Lifting & Functional Hypertrophy",
+        "location": "Los Angeles, CA",
+        "location_type": "Remote / Online",
+        "rating": 4.95,
+        "clients_count": 165,
+        "invite_code": "SAB-SAMANTHA",
+        "bio": "CSCS Certified coach specializing in explosive power development, progressive overload, and athlete conditioning.",
+        "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300"
+    }
+]
+
+_STORE_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "../data/coach_ecosystem.json"),
+    os.path.join(os.path.dirname(__file__), "../../../data/coach_ecosystem.json"),
+    os.path.join(os.path.dirname(__file__), "../../data/coach_ecosystem.json"),
+    os.path.join(os.getcwd(), "data/coach_ecosystem.json"),
+    os.path.join(os.getcwd(), "app/data/coach_ecosystem.json"),
+]
+
+
+def _get_store_file() -> str:
+    for path in _STORE_CANDIDATES:
+        if os.path.exists(path):
+            return path
+    return _STORE_CANDIDATES[0]
 
 
 def _ensure_dir():
-    os.makedirs(os.path.dirname(os.path.abspath(_STORE_FILE)), exist_ok=True)
+    target = _get_store_file()
+    os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
 
 
 def _load_store() -> Dict[str, Any]:
+    file_path = _get_store_file()
     try:
-        if os.path.exists(_STORE_FILE):
-            with open(_STORE_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         logger.warning(f"Failed to read coach local store: {e}")
@@ -24,9 +126,10 @@ def _load_store() -> Dict[str, Any]:
 
 
 def _save_store(data: Dict[str, Any]):
+    file_path = _get_store_file()
     try:
         _ensure_dir()
-        with open(_STORE_FILE, "w", encoding="utf-8") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
     except Exception as e:
         logger.error(f"Failed to save coach local store: {e}")
@@ -358,6 +461,9 @@ class CoachRepository:
             found = next((p for p in profiles if p.get("id") == coach_id), None)
             if found:
                 return found
+        for def_c in _DEFAULT_COACHES:
+            if def_c.get("id") == coach_id:
+                return def_c
         return None
 
     def save_profile(self, coach_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -394,11 +500,11 @@ class CoachRepository:
                 pass
         store = _load_store()
         profiles = store.get("coach_profiles", {})
-        if isinstance(profiles, dict):
+        if isinstance(profiles, dict) and profiles:
             return list(profiles.values())
-        if isinstance(profiles, list):
+        if isinstance(profiles, list) and profiles:
             return profiles
-        return []
+        return list(_DEFAULT_COACHES)
 
     def get_recommended_coaches(self, limit: int = 3) -> List[Dict[str, Any]]:
         """Returns recommended coaches of distinct disciplines/types."""
