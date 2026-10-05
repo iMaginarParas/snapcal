@@ -1914,14 +1914,57 @@ def get_client_my_coach(
         )
         if _is_client_match(c):
             if is_active:
+                if uid and not c.get("user_id"):
+                    c["user_id"] = str(uid)
+                if uid and not st_data.get("sabtrack_user_id"):
+                    st_data["sabtrack_user_id"] = str(uid)
                 if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
                     matched_clients.append(c)
             elif "pending" in c_status.lower() or st_data.get("request_status") == "pending_client_approval":
                 if not pending_client:
                     pending_client = c
 
-    # Fallback in dev/demo ONLY if caller is completely unauthenticated and didn't provide any user identity
-    if not matched_clients and not pending_client and not uid and not user_email and not client_id and os.getenv("APP_ENV") != "production":
+    # Check user notifications for accepted coaching links if no direct match
+    if not matched_clients and uid:
+        try:
+            from app.repositories.db_repository import db_repository
+            user_notifs = db_repository.get_notifications(str(uid))
+            for n in user_notifs:
+                ntype = n.get("type") or n.get("notif_type")
+                extra = n.get("extra_data") or n.get("data") or {}
+                if isinstance(extra, str):
+                    try:
+                        import json
+                        extra = json.loads(extra)
+                    except Exception:
+                        extra = {}
+                n_status = str(extra.get("status") or "").lower()
+                n_title = str(n.get("title") or "").lower()
+                if ntype in ("coaching_accepted", "coaching_request", "program_assigned") or n_status == "accepted" or "accepted" in n_title:
+                    notif_client_id = extra.get("client_id")
+                    if notif_client_id:
+                        for c in all_clients:
+                            if str(c.get("id")) == str(notif_client_id):
+                                c_st = c.setdefault("sabtrack_data", {})
+                                c_st["connected"] = True
+                                c_st["request_status"] = "accepted"
+                                c["status"] = "Active"
+                                if uid and not c.get("user_id"):
+                                    c["user_id"] = str(uid)
+                                if uid and not c_st.get("sabtrack_user_id"):
+                                    c_st["sabtrack_user_id"] = str(uid)
+                                if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
+                                    matched_clients.append(c)
+                                    try:
+                                        coach_repo.save_client(c)
+                                    except Exception:
+                                        pass
+                                break
+        except Exception as e:
+            logger.warning(f"Error checking user notifications in my-coach: {e}")
+
+    # Fallback in dev/demo ONLY if caller has no active match
+    if not matched_clients and not pending_client and os.getenv("APP_ENV") != "production":
         for c in all_clients:
             st_data = c.get("sabtrack_data") or {}
             c_status = str(c.get("status") or "")
@@ -1930,11 +1973,10 @@ def get_client_my_coach(
                 or c_status.lower() == "active"
                 or st_data.get("request_status") == "accepted"
             )
-            sab_uid = str(st_data.get("sabtrack_user_id") or "")
-            c_uid = str(c.get("user_id") or "")
-            if is_active and (sab_uid in ("usr_sab_001", "usr_athlete_e2e") or c_uid in ("usr_sab_001", "usr_athlete_e2e")):
+            if is_active:
                 if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
                     matched_clients.append(c)
+                    break
 
     if matched_clients:
         selected_client = matched_clients[0]
