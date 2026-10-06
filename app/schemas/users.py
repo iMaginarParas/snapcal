@@ -4,6 +4,7 @@ from typing import Optional
 class ProfileUpdateRequest(BaseModel):
     name: Optional[str] = None
     username: Optional[str] = None
+    phone: Optional[str] = None
     age: Optional[int] = None
     weight: Optional[float] = None
     height: Optional[float] = None

@@ -57,6 +57,7 @@ class ProfileService:
         result["id"] = user_id
         result["name"] = core_user.get("name") or "Guest User"
         result["username"] = core_user.get("username") or user_id
+        result["phone"] = core_user.get("phone") or ""
         result["profile_picture_url"] = core_user.get("profile_picture_url")
         
         return {"success": True, "data": result}
@@ -69,6 +70,8 @@ class ProfileService:
             core_updates["name"] = payload.name
         if payload.username is not None:
             core_updates["username"] = payload.username
+        if payload.phone is not None:
+            core_updates["phone"] = payload.phone.strip()
         if payload.goals is not None:
             core_updates["goals"] = payload.goals
             
@@ -135,6 +138,7 @@ class ProfileService:
         core_user = db_repository.get_user_profile(user_id) or {}
         result["name"] = core_user.get("name") or "Guest User"
         result["username"] = core_user.get("username") or user_id
+        result["phone"] = core_user.get("phone") or (payload.phone.strip() if payload.phone else "")
         result["profile_picture_url"] = core_user.get("profile_picture_url")
 
         return {"success": True, "data": result}

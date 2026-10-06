@@ -53,6 +53,7 @@ $$ LANGUAGE plpgsql;
 -- public.users
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS username                TEXT UNIQUE;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS name                    TEXT;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS phone                   TEXT;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS profile_picture_url     TEXT;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS is_pro                  BOOLEAN DEFAULT FALSE;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS subscription_tier       TEXT DEFAULT 'free';
@@ -143,6 +144,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     email                   TEXT UNIQUE NOT NULL,
     username                TEXT UNIQUE,
     name                    TEXT,
+    phone                   TEXT,
     profile_picture_url     TEXT,
     age                     INT,
     weight                  NUMERIC,
