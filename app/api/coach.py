@@ -96,129 +96,6 @@ def search_sabtrack_users(
     """
     clean_q = (q or "").strip()
 
-    demo_sabtrack_users = [
-        {
-            "id": "usr_sab_001",
-            "name": "Arjun Sharma",
-            "username": "arjun_fit",
-            "email": "arjun.sharma@sabtrack.in",
-            "phone": "+91 98200 44321",
-            "profile_picture_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 78.5,
-            "target_weight": 72.0,
-            "age": 28,
-            "gender": "Male",
-            "city": "Mumbai",
-            "goal": "Fat loss & functional hypertrophy",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_002",
-            "name": "Priya Patel",
-            "username": "priya_runs",
-            "email": "priya.patel@sabtrack.in",
-            "phone": "+91 98111 88765",
-            "profile_picture_url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 58.0,
-            "target_weight": 55.0,
-            "age": 26,
-            "gender": "Female",
-            "city": "Bengaluru",
-            "goal": "Half marathon endurance & core stability",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_003",
-            "name": "Rohit Verma",
-            "username": "rohit_lifts",
-            "email": "rohit.verma@sabtrack.in",
-            "phone": "+91 97233 11223",
-            "profile_picture_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 86.0,
-            "target_weight": 82.0,
-            "age": 31,
-            "gender": "Male",
-            "city": "Delhi NCR",
-            "goal": "Strength & powerlifting prep",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_004",
-            "name": "Ananya Sen",
-            "username": "ananya_yoga",
-            "email": "ananya.sen@sabtrack.in",
-            "phone": "+91 99344 55667",
-            "profile_picture_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 61.5,
-            "target_weight": 58.0,
-            "age": 27,
-            "gender": "Female",
-            "city": "Pune",
-            "goal": "Post-injury mobility & clean nutrition",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_005",
-            "name": "Vikram Malhotra",
-            "username": "vikram_iron",
-            "email": "vikram.m@sabtrack.in",
-            "phone": "+91 98333 44556",
-            "profile_picture_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 82.0,
-            "target_weight": 78.0,
-            "age": 30,
-            "gender": "Male",
-            "city": "Hyderabad",
-            "goal": "Lean bulk & VO2 max conditioning",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_006",
-            "name": "Neha Kapoor",
-            "username": "neha_triathlon",
-            "email": "neha.k@sabtrack.in",
-            "phone": "+91 98444 55667",
-            "profile_picture_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 56.5,
-            "target_weight": 54.0,
-            "age": 29,
-            "gender": "Female",
-            "city": "Chennai",
-            "goal": "Olympic triathlon cycle & swim endurance",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_007",
-            "name": "Siddharth Rao",
-            "username": "sid_calisthenics",
-            "email": "siddharth.r@sabtrack.in",
-            "phone": "+91 98777 11223",
-            "profile_picture_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 71.0,
-            "target_weight": 70.0,
-            "age": 25,
-            "gender": "Male",
-            "city": "Bengaluru",
-            "goal": "Muscle-up & bodyweight gymnastics",
-            "sabtrack_active": True
-        },
-        {
-            "id": "usr_sab_008",
-            "name": "Meera Joshi",
-            "username": "meera_wellness",
-            "email": "meera.j@sabtrack.in",
-            "phone": "+91 98666 22334",
-            "profile_picture_url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80",
-            "current_weight": 64.0,
-            "target_weight": 60.0,
-            "age": 32,
-            "gender": "Female",
-            "city": "Ahmedabad",
-            "goal": "Post-partum core strength & hormone health",
-            "sabtrack_active": True
-        }
-    ]
-
     results = []
     try:
         from app.repositories.db_repository import db_repository
@@ -226,23 +103,22 @@ def search_sabtrack_users(
             found = db_repository.search_users(clean_q)
             if found:
                 results.extend(found)
+        else:
+            # Query real users from Supabase when query is empty
+            from app.database.supabase import supabase_client
+            res = supabase_client.from_("users").select("id, name, email, username, profile_picture_url").limit(50).execute()
+            if res and res.data:
+                for u in res.data:
+                    results.append({
+                        "id": str(u.get("id")),
+                        "name": u.get("name") or u.get("username") or u.get("email") or "User",
+                        "username": u.get("username") or "",
+                        "email": u.get("email") or "",
+                        "profile_picture_url": u.get("profile_picture_url"),
+                        "sabtrack_active": True
+                    })
     except Exception as e:
-        logger.warning(f"Error querying SabTrack users: {e}")
-
-    if not clean_q:
-        # Return all registered users in the directory
-        for u in demo_sabtrack_users:
-            if not any(r.get("email") == u["email"] for r in results):
-                results.append(u)
-    else:
-        q_lower = clean_q.lower()
-        for u in demo_sabtrack_users:
-            if (q_lower in u["name"].lower() or 
-                q_lower in u["email"].lower() or 
-                q_lower in u["username"].lower() or 
-                q_lower in u.get("phone", "").lower()):
-                if not any(r.get("email") == u["email"] for r in results):
-                    results.append(u)
+        logger.warning(f"Error querying SabTrack users from Supabase: {e}")
 
     return {"success": True, "count": len(results), "data": results}
 
@@ -802,13 +678,48 @@ def assign_coach_program(
         if client:
             client["program_name"] = prog_title
             client["program_id"] = program_id
+            
+            prog_workouts = []
+            if prog:
+                if prog.get("workouts"):
+                    prog_workouts = prog.get("workouts")
+                elif prog.get("sections"):
+                    for sec in prog.get("sections") or []:
+                        if isinstance(sec, dict):
+                            prog_workouts.append({
+                                "id": sec.get("id"),
+                                "name": sec.get("name") or "Workout Routine",
+                                "category": sec.get("category") or "Strength",
+                                "duration": sec.get("duration") or "45 min",
+                                "exercises": sec.get("exercises") or []
+                            })
+                elif prog.get("weeklySchedule"):
+                    for item in prog.get("weeklySchedule") or []:
+                        if isinstance(item, dict) and item.get("type", "").lower() in ("workout", "training", ""):
+                            prog_workouts.append({
+                                "id": item.get("id"),
+                                "name": item.get("name") or f"{item.get('dayOfWeek', 'Workout')} Session",
+                                "day": item.get("dayOfWeek"),
+                                "category": item.get("category") or "Training",
+                                "duration": item.get("duration") or "50 min",
+                                "exercises": item.get("exercises") or []
+                            })
+                elif prog.get("exercises"):
+                    prog_workouts = [{
+                        "name": prog_title,
+                        "category": prog.get("category") or "Training",
+                        "duration": "45 min",
+                        "exercises": prog.get("exercises")
+                    }]
+
             client["program_detail"] = {
                 "id": program_id,
                 "name": prog_title,
                 "weekCurrent": 1,
                 "weekTotal": duration_weeks,
                 "workoutsThisWeek": f"0 / {frequency.split(' ')[0] if ' ' in frequency else '4'} workouts",
-                "targetSummary": f"Assigned on {datetime.utcnow().strftime('%b %d')}. Starts {start_date}."
+                "targetSummary": f"Assigned on {datetime.utcnow().strftime('%b %d')}. Starts {start_date}.",
+                "workouts": prog_workouts
             }
             # Add to notes
             notes = client.setdefault("notes", [])
@@ -1243,6 +1154,58 @@ def delete_coach_checkin(
     cid = _extract_coach_id(authorization)
     res = coach_repo.delete_checkin(checkin_id, cid)
     return {"success": res}
+
+
+# --- 9B. Client Daily Presence (Finished Meals & Workouts) ---
+@router.post("/presence/record")
+def record_client_presence(
+    payload: Dict[str, Any] = Body(...),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Client ticks to show presence for completing a prescribed meal or workout.
+    """
+    from datetime import datetime
+    client_id = payload.get("client_id") or "client_default"
+    item_type = payload.get("type", "meal")
+    item_key = str(payload.get("item_key") or payload.get("name") or "")
+    is_completed = bool(payload.get("completed", True))
+    date_str = payload.get("date") or datetime.utcnow().strftime("%Y-%m-%d")
+
+    presence_item = {
+        "id": f"pres_{client_id}_{item_type}_{item_key}_{date_str}",
+        "client_id": client_id,
+        "type": item_type,
+        "item_key": item_key,
+        "item_name": payload.get("name") or item_key,
+        "completed": is_completed,
+        "date": date_str,
+        "recorded_at": datetime.utcnow().isoformat()
+    }
+    coach_repo._upsert_item("client_presence", presence_item)
+    return {"success": True, "data": presence_item}
+
+
+@router.get("/presence")
+def get_client_presence(
+    client_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None)
+):
+    from datetime import datetime
+    target_date = date or datetime.utcnow().strftime("%Y-%m-%d")
+    all_presence = coach_repo._query_table("client_presence")
+    cid_str = str(client_id or "")
+    client_records = [
+        p for p in all_presence 
+        if (not cid_str or str(p.get("client_id")) == cid_str) 
+        and p.get("date") == target_date
+    ]
+    return {
+        "success": True, 
+        "date": target_date,
+        "completed_meals": [p.get("item_key") for p in client_records if p.get("type") == "meal" and p.get("completed")],
+        "completed_workouts": [p.get("item_key") for p in client_records if p.get("type") == "workout" and p.get("completed")]
+    }
 
 
 # --- 10. Messages & Communication ---
@@ -1882,8 +1845,6 @@ def get_client_my_coach(
 
     # Search existing clients across coach stores
     all_clients = coach_repo.get_all_clients()
-    if not all_clients:
-        all_clients = coach_repo.get_clients("coach_default")
 
     matched_clients = []
     pending_client = None
@@ -1963,21 +1924,6 @@ def get_client_my_coach(
         except Exception as e:
             logger.warning(f"Error checking user notifications in my-coach: {e}")
 
-    # Fallback in dev/demo ONLY if caller has no active match
-    if not matched_clients and not pending_client and os.getenv("APP_ENV") != "production":
-        for c in all_clients:
-            st_data = c.get("sabtrack_data") or {}
-            c_status = str(c.get("status") or "")
-            is_active = (
-                st_data.get("connected") is True
-                or c_status.lower() == "active"
-                or st_data.get("request_status") == "accepted"
-            )
-            if is_active:
-                if not any(mc.get("coach_id") == c.get("coach_id") for mc in matched_clients):
-                    matched_clients.append(c)
-                    break
-
     if matched_clients:
         selected_client = matched_clients[0]
         if coach_id:
@@ -2021,17 +1967,68 @@ def get_client_my_coach(
             mc_assigned_program = None
             mc_prog_id = mc.get("program_id") or (mc.get("program_detail") or {}).get("id")
             mc_prog_name = mc.get("program_name")
-            if mc_prog_id or (mc_prog_name and mc_prog_name not in ("Not Assigned", "Standard Protocol")):
+            if mc_prog_id or (mc_prog_name and str(mc_prog_name).strip() not in ("Not Assigned", "Standard Protocol", "None", "")):
                 all_progs = coach_repo.get_programs(mc_coach_id)
                 mc_matched_prog = next(
                     (p for p in all_progs if str(p.get("id")) == str(mc_prog_id) or p.get("title") == mc_prog_name or p.get("name") == mc_prog_name),
                     None
                 )
+                prog_source = mc.get("program_detail") or mc_matched_prog or {}
+                extracted_wos = []
+                if prog_source.get("workouts") and isinstance(prog_source.get("workouts"), list):
+                    extracted_wos = prog_source["workouts"]
+                elif mc_matched_prog and mc_matched_prog.get("workouts"):
+                    extracted_wos = mc_matched_prog.get("workouts")
+                elif prog_source.get("sections") and isinstance(prog_source.get("sections"), list):
+                    for sec in prog_source["sections"]:
+                        if isinstance(sec, dict):
+                            extracted_wos.append({
+                                "id": sec.get("id"),
+                                "name": sec.get("name") or "Workout Routine",
+                                "category": sec.get("category") or "Strength",
+                                "duration": sec.get("duration") or "45 min",
+                                "exercises": sec.get("exercises") or []
+                            })
+                elif mc_matched_prog and mc_matched_prog.get("sections"):
+                    for sec in mc_matched_prog.get("sections") or []:
+                        if isinstance(sec, dict):
+                            extracted_wos.append({
+                                "id": sec.get("id"),
+                                "name": sec.get("name") or "Workout Routine",
+                                "category": sec.get("category") or "Strength",
+                                "duration": sec.get("duration") or "45 min",
+                                "exercises": sec.get("exercises") or []
+                            })
+                elif prog_source.get("weeklySchedule"):
+                    for item in prog_source.get("weeklySchedule") or []:
+                        if isinstance(item, dict) and item.get("type", "").lower() in ("workout", "training", ""):
+                            extracted_wos.append({
+                                "id": item.get("id"),
+                                "name": item.get("name") or f"{item.get('dayOfWeek', 'Workout')} Session",
+                                "day": item.get("dayOfWeek"),
+                                "category": item.get("category") or "Training",
+                                "duration": item.get("duration") or "50 min",
+                                "exercises": item.get("exercises") or []
+                            })
+                elif prog_source.get("exercises"):
+                    extracted_wos = [{
+                        "name": mc_prog_name or "Prescribed Routine",
+                        "category": "Strength",
+                        "duration": "45 min",
+                        "exercises": prog_source.get("exercises")
+                    }]
+
+                if not extracted_wos:
+                    coach_wos = coach_repo.get_workouts(mc_coach_id)
+                    if coach_wos:
+                        extracted_wos = coach_wos[:3]
+
                 mc_assigned_program = {
                     "id": mc_prog_id or (mc_matched_prog.get("id") if mc_matched_prog else "prog_active"),
                     "name": mc_prog_name or (mc_matched_prog.get("title") or mc_matched_prog.get("name") if mc_matched_prog else "Training Program"),
                     "detail": mc.get("program_detail") or {},
-                    "full_program": mc_matched_prog
+                    "full_program": mc_matched_prog,
+                    "workouts": extracted_wos
                 }
 
             mc_telemetry = diet_service.get_client_diet_telemetry(mc_cid, target_date)

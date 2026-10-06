@@ -6,92 +6,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_COACHES = [
-    {
-        "id": "coach_default",
-        "name": "Coach Sunil Kumar",
-        "title": "Chief Strength & Conditioning Coach",
-        "discipline": "Strength & Conditioning",
-        "specialty": "Fitness & Strength",
-        "location": "Bangalore, IN",
-        "location_type": "In-Person / Hybrid",
-        "rating": 4.97,
-        "clients_count": 210,
-        "invite_code": "SAB-SUNIL",
-        "bio": "Master coach with 12+ years optimizing hypertrophy, strength biomechanics, and athlete body recomposition.",
-        "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300"
-    },
-    {
-        "id": "coach_marcus_vance",
-        "name": "Dr. Marcus Vance",
-        "title": "Lead Performance Nutritionist",
-        "discipline": "Nutrition & Dietetics",
-        "specialty": "Nutrition & Dietetics",
-        "location": "New York, NY",
-        "location_type": "Remote / Online",
-        "rating": 4.96,
-        "clients_count": 142,
-        "invite_code": "SAB-VANCE",
-        "bio": "Ph.D. in Human Bioenergetics. Specializes in metabolic flexibility, precision macronutrient cycling, and competition prep.",
-        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300"
-    },
-    {
-        "id": "coach_priya_sharma",
-        "name": "Coach Priya Sharma",
-        "title": "Mobility & Structural Recovery Coach",
-        "discipline": "Yoga & Mobility",
-        "specialty": "Yoga & Mobility",
-        "location": "Austin, TX",
-        "location_type": "In-Person / Hybrid",
-        "rating": 4.98,
-        "clients_count": 98,
-        "invite_code": "SAB-PRIYA",
-        "bio": "Former national gymnast and movement specialist. Focused on joint longevity, functional range conditioning, and breathwork.",
-        "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300"
-    },
-    {
-        "id": "coach_david_chen",
-        "name": "Coach David Chen",
-        "title": "Aerobic Capacity & Endurance Specialist",
-        "discipline": "Cardio & Endurance",
-        "specialty": "Cardio & Endurance",
-        "location": "Boulder, CO",
-        "location_type": "Remote / Online",
-        "rating": 4.93,
-        "clients_count": 116,
-        "invite_code": "SAB-DAVID",
-        "bio": "Ultra-marathoner and physiology coach. Specializes in VO2 max optimization, heart-rate zone training, and lactate clearance.",
-        "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300"
-    },
-    {
-        "id": "coach_elena_rostova",
-        "name": "Dr. Elena Rostova",
-        "title": "Corrective Exercise & Rehab Director",
-        "discipline": "Physio & Rehab",
-        "specialty": "Physio & Rehab",
-        "location": "Chicago, IL",
-        "location_type": "In-Person / Hybrid",
-        "rating": 4.99,
-        "clients_count": 87,
-        "invite_code": "SAB-ELENA",
-        "bio": "Doctor of Physical Therapy. Focuses on post-injury kinetic retraining, spine mechanics, and return-to-sport protocols.",
-        "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300"
-    },
-    {
-        "id": "coach_test_pro",
-        "name": "Coach Samantha Ray",
-        "title": "Olympic Lifting & Functional Hypertrophy",
-        "discipline": "Strength & Conditioning",
-        "specialty": "Olympic Lifting & Functional Hypertrophy",
-        "location": "Los Angeles, CA",
-        "location_type": "Remote / Online",
-        "rating": 4.95,
-        "clients_count": 165,
-        "invite_code": "SAB-SAMANTHA",
-        "bio": "CSCS Certified coach specializing in explosive power development, progressive overload, and athlete conditioning.",
-        "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300"
-    }
-]
+_DEFAULT_COACHES = []
 
 _STORE_CANDIDATES = [
     os.path.join(os.path.dirname(__file__), "../data/coach_ecosystem.json"),
@@ -166,11 +81,14 @@ def _normalize_discipline(coaching_type: str) -> str:
 
 class CoachRepository:
     # --- Generic Table Helpers ---
-    def _query_table(self, table: str, coach_id: str) -> List[Dict[str, Any]]:
+    def _query_table(self, table: str, coach_id: Optional[str] = None) -> List[Dict[str, Any]]:
         sb = _get_supabase()
         if sb:
             try:
-                res = sb.from_(table).select("*").eq("coach_id", coach_id).execute()
+                q = sb.from_(table).select("*")
+                if coach_id is not None:
+                    q = q.eq("coach_id", coach_id)
+                res = q.execute()
                 if res.data is not None and len(res.data) > 0:
                     return res.data
             except Exception as e:
@@ -178,7 +96,9 @@ class CoachRepository:
 
         store = _load_store()
         table_data = store.get(table, [])
-        return [item for item in table_data if item.get("coach_id") == coach_id]
+        if coach_id is not None:
+            return [item for item in table_data if item.get("coach_id") == coach_id]
+        return table_data
 
     def _upsert_item(self, table: str, item: Dict[str, Any]) -> Dict[str, Any]:
         saved_item = item
@@ -461,9 +381,6 @@ class CoachRepository:
             found = next((p for p in profiles if p.get("id") == coach_id), None)
             if found:
                 return found
-        for def_c in _DEFAULT_COACHES:
-            if def_c.get("id") == coach_id:
-                return def_c
         return None
 
     def save_profile(self, coach_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -504,7 +421,7 @@ class CoachRepository:
             return list(profiles.values())
         if isinstance(profiles, list) and profiles:
             return profiles
-        return list(_DEFAULT_COACHES)
+        return []
 
     def get_recommended_coaches(self, limit: int = 3) -> List[Dict[str, Any]]:
         """Returns recommended coaches of distinct disciplines/types."""

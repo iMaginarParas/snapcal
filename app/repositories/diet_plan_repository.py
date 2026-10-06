@@ -418,24 +418,33 @@ class DietPlanRepository:
     def get_client_today_plan(self, client_id: str, date_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
         target_date = date_str or datetime.utcnow().strftime("%Y-%m-%d")
         
+        cid_str = str(client_id or "").strip()
+        if not cid_str:
+            return None
+
         # 1. Check exact date dispatch
         for d in self._daily_dispatches:
-            if d.get("client_id") == client_id and d.get("target_date") == target_date:
+            d_cid = str(d.get("client_id") or "").strip()
+            d_uid = str(d.get("user_id") or "").strip()
+            if (d_cid == cid_str or d_uid == cid_str) and d.get("target_date") == target_date:
                 return d
                 
         # 2. Check latest dispatch for this client
-        client_dispatches = [d for d in self._daily_dispatches if d.get("client_id") == client_id]
+        client_dispatches = [
+            d for d in self._daily_dispatches
+            if str(d.get("client_id") or "").strip() == cid_str or str(d.get("user_id") or "").strip() == cid_str
+        ]
         if client_dispatches:
             return client_dispatches[0]
 
-        # 3. Check direct assigned plan
+        # 3. Check direct assigned plan specifically for this client
         for p in self._in_memory_plans:
-            if p.get("client_id") == client_id:
+            p_cid = str(p.get("client_id") or "").strip()
+            p_uid = str(p.get("user_id") or "").strip()
+            if (p_cid == cid_str or p_uid == cid_str) and not p.get("is_template"):
                 return p
 
-        # 4. Fallback default active protocol
-        if self._in_memory_plans:
-            return self._in_memory_plans[0]
+        # No nutrition plan dispatched or assigned yet for this client
         return None
 
     def get_client_plan_history(self, client_id: str) -> List[Dict[str, Any]]:
