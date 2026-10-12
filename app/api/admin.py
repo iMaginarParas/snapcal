@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Body, Header
 
-from app.repositories.coach_repository import coach_repo, _load_store
+from app.repositories.coach_repository import coach_repo, _load_store, _save_store
 from app.repositories.db_repository import db_repository
 from app.database.supabase import get_track_supabase, get_coach_supabase, is_supabase_live
 from app.services.diet.diet_service import diet_service
@@ -679,3 +679,197 @@ def get_admin_ecosystem_health():
         "live_metrics": counts,
         "verified_at": datetime.utcnow().isoformat()
     }
+
+
+# --- 5. Coach Onboarding & Intake Applications Review Queue ---
+@router.get("/coach-applications")
+def get_admin_coach_applications(
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None)
+):
+    """
+    Returns pending, approved, and rejected coach intake applications.
+    """
+    store = _load_store()
+    applications = store.get("coach_applications", [])
+
+    if not applications:
+        # Seed baseline candidates
+        applications = [
+            {
+                "id": "app-1",
+                "name": "Siddharth Mehra",
+                "email": "siddharth.mehra@fitstrength.io",
+                "phone": "+91 98201 44892",
+                "domain": "Strength & Conditioning / Hypertrophy",
+                "experienceYears": "5–8 Years",
+                "aboutWork": "Specialized in biomechanically sound resistance training, breaking strength plateaus, and structured progressive overload. Train competitive powerlifters and athletes seeking hypertrophy.",
+                "clientCount": 45,
+                "certifications": "CSCS (NSCA), ACE CPT, Precision Nutrition L1",
+                "portfolioUrl": "@coach.siddharth_m",
+                "status": "pending_review",
+                "appliedAt": "2 hours ago"
+            },
+            {
+                "id": "app-2",
+                "name": "Tanvi Deshmukh",
+                "email": "tanvi.nutrition@healthspace.in",
+                "phone": "+91 99302 77104",
+                "domain": "Clinical Nutrition & Dietetics",
+                "experienceYears": "6–8 Years",
+                "aboutWork": "Clinical dietitian working with women managing PCOS/PCOD, hypothyroidism, and insulin resistance. Focus on gut microbiome health and non-restrictive sustainable dietary protocols.",
+                "clientCount": 80,
+                "certifications": "M.Sc. Clinical Nutrition, Certified Diabetes Educator (CDE)",
+                "portfolioUrl": "linkedin.com/in/tanvi-deshmukh-rd",
+                "status": "pending_review",
+                "appliedAt": "5 hours ago"
+            },
+            {
+                "id": "app-3",
+                "name": "Dr. Naman Kashyap",
+                "email": "dr.naman@longevityperformance.org",
+                "phone": "+91 98110 55219",
+                "domain": "Longevity, Biomarkers & Healthspan",
+                "experienceYears": "9+ Years (Veteran)",
+                "aboutWork": "Sports medicine and healthspan practitioner. Focus on VO2 max testing, continuous glucose telemetry, lipid panel modulation, and sleep architecture optimization.",
+                "clientCount": 35,
+                "certifications": "MBBS, Sports Medicine Fellowship, ACSM",
+                "portfolioUrl": "dranamankashyap.com",
+                "status": "pending_review",
+                "appliedAt": "Yesterday"
+            }
+        ]
+        store["coach_applications"] = applications
+        _save_store(store)
+
+    filtered = applications
+    if status and status != "all":
+        filtered = [a for a in filtered if a.get("status") == status]
+
+    if search:
+        q = search.lower()
+        filtered = [
+            a for a in filtered
+            if q in a.get("name", "").lower()
+            or q in a.get("email", "").lower()
+            or q in a.get("domain", "").lower()
+            or q in a.get("certifications", "").lower()
+        ]
+
+    return {
+        "success": True,
+        "count": len(filtered),
+        "data": filtered
+    }
+
+
+@router.post("/coach-applications")
+def submit_coach_application(payload: Dict[str, Any] = Body(...)):
+    """
+    Submits a trainer onboarding application for administrator review.
+    """
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Name and email are required.")
+
+    store = _load_store()
+    applications = store.get("coach_applications", [])
+
+    app_id = payload.get("id") or f"app-{int(datetime.utcnow().timestamp())}"
+    new_app = {
+        "id": app_id,
+        "name": name,
+        "email": email,
+        "phone": payload.get("phone", ""),
+        "domain": payload.get("domain", "General Fitness"),
+        "experienceYears": payload.get("experienceYears", "1-2 Years"),
+        "aboutWork": payload.get("aboutWork", ""),
+        "clientCount": int(payload.get("clientCount", 0)),
+        "certifications": payload.get("certifications", ""),
+        "portfolioUrl": payload.get("portfolioUrl", ""),
+        "status": "pending_review",
+        "appliedAt": "Just now",
+        "created_at": datetime.utcnow().isoformat()
+    }
+
+    # Deduplicate by email
+    applications = [a for a in applications if a.get("email") != email]
+    applications.insert(0, new_app)
+    store["coach_applications"] = applications
+    _save_store(store)
+
+    return {
+        "success": True,
+        "message": "Coach onboarding application submitted successfully.",
+        "data": new_app
+    }
+
+
+@router.post("/coach-applications/{application_id}/approve")
+def approve_coach_application(
+    application_id: str,
+    body: Optional[Dict[str, Any]] = Body(default={})
+):
+    """
+    Approves a coach intake application and provisions their profile credentials.
+    """
+    store = _load_store()
+    applications = store.get("coach_applications", [])
+    target = next((a for a in applications if a.get("id") == application_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    target["status"] = "approved"
+    target["reviewedAt"] = datetime.utcnow().strftime("%b %d, %Y")
+    _save_store(store)
+
+    # Provision coach profile into store
+    coach_id = f"coach_{target['name'].lower().replace(' ', '_')}"
+    new_coach = {
+        "id": coach_id,
+        "name": target["name"],
+        "email": target["email"],
+        "phone": target.get("phone", ""),
+        "title": target.get("domain", "Coach"),
+        "practice_name": f"{target['name']}'s Practice",
+        "bio": target.get("aboutWork", ""),
+        "status": "active",
+        "clientCount": target.get("clientCount", 0),
+        "created_at": datetime.utcnow().isoformat()
+    }
+    coach_repo.create_or_update_profile(new_coach)
+
+    return {
+        "success": True,
+        "message": f"Application for {target['name']} approved and provisioned.",
+        "coach": new_coach
+    }
+
+
+@router.post("/coach-applications/{application_id}/reject")
+def reject_coach_application(
+    application_id: str,
+    body: Optional[Dict[str, Any]] = Body(default={})
+):
+    """
+    Declines a coach intake application with an optional reason.
+    """
+    store = _load_store()
+    applications = store.get("coach_applications", [])
+    target = next((a for a in applications if a.get("id") == application_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    reason = body.get("reason", "Candidate does not meet clinical practice threshold") if body else "Candidate does not meet threshold"
+    target["status"] = "rejected"
+    target["rejectionReason"] = reason
+    target["reviewedAt"] = datetime.utcnow().strftime("%b %d, %Y")
+    _save_store(store)
+
+    return {
+        "success": True,
+        "message": f"Application for {target['name']} declined.",
+        "application_id": application_id
+    }
+
