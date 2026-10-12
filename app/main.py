@@ -27,6 +27,7 @@ from app.api.notifications import router as notifications_router
 from app.api.payments import router as payments_router
 from app.api.diet_plans import router as diet_plans_router
 from app.api.coach import router as coach_router
+from app.api.admin import router as admin_router
 
 
 app = FastAPI(
@@ -169,6 +170,7 @@ app.include_router(notifications_router, prefix=settings.API_V1_STR)
 app.include_router(payments_router, prefix=settings.API_V1_STR)
 app.include_router(diet_plans_router, prefix=settings.API_V1_STR)
 app.include_router(coach_router, prefix=settings.API_V1_STR)
+app.include_router(admin_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
