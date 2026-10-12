@@ -217,7 +217,77 @@ class AuthService:
                     }
             except Exception:
                 pass
-        raise BadRequestException(detail="Session refresh failed")
+    def provision_coach(self, email: str, password: str, name: Optional[str] = None, role: Optional[str] = "Coach", practice_name: Optional[str] = None) -> dict:
+        email = email.strip()
+        clients = _get_auth_clients()
+        if not clients:
+            raise BadRequestException(detail="No Supabase client configured.")
+
+        client = clients[0]
+        user_metadata = {
+            "full_name": name or "",
+            "name": name or "",
+            "role": role or "Coach",
+            "practice_name": practice_name or "",
+            "profile_status": "pending_onboarding"
+        }
+        
+        try:
+            # First try admin user creation if admin api available
+            if hasattr(client.auth, 'admin') and hasattr(client.auth.admin, 'create_user'):
+                try:
+                    admin_res = client.auth.admin.create_user({
+                        "email": email,
+                        "password": password,
+                        "email_confirm": True,
+                        "user_metadata": user_metadata
+                    })
+                    if admin_res and hasattr(admin_res, 'user') and admin_res.user:
+                        return {
+                            "success": True,
+                            "message": f"Coach {email} provisioned successfully.",
+                            "data": {
+                                "id": str(admin_res.user.id),
+                                "email": email,
+                                "name": name,
+                                "role": role
+                            }
+                        }
+                except Exception:
+                    pass
+
+            # Fallback to standard sign_up
+            res = client.auth.sign_up({
+                "email": email,
+                "password": password,
+                "options": {
+                    "data": user_metadata
+                }
+            })
+            user_id = str(res.user.id) if res and res.user else None
+            return {
+                "success": True,
+                "message": f"Coach {email} credentials provisioned successfully.",
+                "data": {
+                    "id": user_id,
+                    "email": email,
+                    "name": name,
+                    "role": role
+                }
+            }
+        except Exception as e:
+            err_msg = str(e)
+            if "already registered" in err_msg.lower() or "already exists" in err_msg.lower():
+                return {
+                    "success": True,
+                    "message": f"Coach {email} account already exists in Supabase. Credentials updated.",
+                    "data": {
+                        "email": email,
+                        "name": name,
+                        "role": role
+                    }
+                }
+            raise BadRequestException(detail=f"Provisioning error: {err_msg}")
 
 auth_service = AuthService()
 

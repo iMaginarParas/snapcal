@@ -46,6 +46,25 @@ def auth_refresh(payload: RefreshRequest):
     """Exchange a refresh_token for a new access_token. Called automatically by the app when a 401 is received."""
     return auth_service.refresh_session(payload.refresh_token)
 
+class ProvisionCoachRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+    role: Optional[str] = "Coach"
+    practice_name: Optional[str] = None
+    admin_key: Optional[str] = None
+
+@router.post("/admin/provision-coach")
+def auth_admin_provision_coach(payload: ProvisionCoachRequest):
+    """Admin endpoint to provision credentials for a new coach profile."""
+    return auth_service.provision_coach(
+        email=payload.email,
+        password=payload.password,
+        name=payload.name,
+        role=payload.role,
+        practice_name=payload.practice_name
+    )
+
 @router.get("/me")
 def auth_me(authorization: Optional[str] = Header(None)):
     """Returns the current user's id decoded from their JWT token."""
