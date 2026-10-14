@@ -405,6 +405,26 @@ class CoachRepository:
         _save_store(store)
         return profile
 
+    def create_or_update_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        cid = profile.get("id") or f"coach_{int(datetime.utcnow().timestamp())}"
+        return self.save_profile(cid, profile)
+
+    def delete_profile(self, coach_id: str) -> bool:
+        sb = _get_supabase()
+        if sb:
+            try:
+                sb.from_("coach_profiles").delete().eq("id", coach_id).execute()
+            except Exception:
+                pass
+        store = _load_store()
+        profiles = store.get("coach_profiles", {})
+        if isinstance(profiles, dict) and coach_id in profiles:
+            del profiles[coach_id]
+        elif isinstance(profiles, list):
+            store["coach_profiles"] = [p for p in profiles if p.get("id") != coach_id]
+        _save_store(store)
+        return True
+
     def get_available_coaches(self) -> List[Dict[str, Any]]:
         """Returns registered coach profiles that are active and available for athletes."""
         sb = _get_supabase()

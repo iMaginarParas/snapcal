@@ -57,13 +57,30 @@ class ProvisionCoachRequest(BaseModel):
 @router.post("/admin/provision-coach")
 def auth_admin_provision_coach(payload: ProvisionCoachRequest):
     """Admin endpoint to provision credentials for a new coach profile."""
-    return auth_service.provision_coach(
+    from datetime import datetime
+    from app.repositories.coach_repository import coach_repo
+
+    res = auth_service.provision_coach(
         email=payload.email,
         password=payload.password,
         name=payload.name,
         role=payload.role,
         practice_name=payload.practice_name
     )
+
+    coach_id = (res.get("data") or {}).get("id") or f"coach_{payload.email.split('@')[0]}"
+    coach_profile = {
+        "id": coach_id,
+        "name": payload.name or "Coach",
+        "email": payload.email,
+        "role": payload.role or "Coach",
+        "practice_name": payload.practice_name or "SabCoach Practice",
+        "status": "pending_onboarding",
+        "created_at": datetime.utcnow().isoformat()
+    }
+    coach_repo.save_profile(coach_id, coach_profile)
+    res["user"] = {"id": coach_id, "email": payload.email, "name": payload.name}
+    return res
 
 @router.get("/me")
 def auth_me(authorization: Optional[str] = Header(None)):
