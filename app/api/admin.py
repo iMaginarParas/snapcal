@@ -23,150 +23,46 @@ router = APIRouter(prefix="/admin", tags=["Master Admin Command & 360° Observab
 def _get_crm_athletes() -> List[Dict[str, Any]]:
     store = _load_store()
     athletes = store.get("sabtrack_crm_athletes", [])
-    if not athletes:
-        athletes = [
-            {
-                "id": "usr-1",
-                "name": "Dr. Vikram Malhotra",
-                "email": "vikram.malhotra@apollohospitals.org",
-                "phone": "+91 98201 44512",
-                "subscriptionTier": "elite",
-                "consultationPlan": "elite",
-                "isPro": True,
-                "assignedCoach": "Coach Priya Sharma",
-                "assignedCoachId": "coach_priya_sharma",
-                "allottedAt": "Oct 08, 2026",
-                "allotmentNotes": "Specialised protocol for hypertension and metabolic risk management",
-                "primaryGoal": "Hypertension control, HbA1c < 6.2%, metabolic stabilization",
-                "healthConditions": ["Hypertension", "Pre-Diabetes", "High Cortisol"],
-                "dailyStepsAvg": 11450,
-                "calorieTarget": 2150,
-                "streakDays": 42,
-                "adherenceScore": 94,
-                "createdAt": "2026-06-15",
-                "lastActive": "5m ago"
-            },
-            {
-                "id": "usr-2",
-                "name": "Ananya Deshmukh",
-                "email": "ananya.d@techmahindra.com",
-                "phone": "+91 97692 88210",
-                "subscriptionTier": "elite",
-                "consultationPlan": "elite",
-                "isPro": True,
-                "assignedCoach": None,
-                "assignedCoachId": None,
-                "primaryGoal": "PCOS management, hormonal balance, sustainable 7kg fat loss",
-                "healthConditions": ["PCOS / PCOD", "Insulin Resistance", "Thyroid Imbalance"],
-                "dailyStepsAvg": 8900,
-                "calorieTarget": 1750,
-                "streakDays": 28,
-                "adherenceScore": 88,
-                "createdAt": "2026-07-20",
-                "lastActive": "22m ago"
-            },
-            {
-                "id": "usr-3",
-                "name": "Aditya Singhania",
-                "email": "aditya@singhaniacapital.com",
-                "phone": "+91 98110 55001",
-                "subscriptionTier": "longevity",
-                "consultationPlan": "longevity",
-                "isPro": True,
-                "assignedCoach": "Dr. Marcus Vance",
-                "assignedCoachId": "coach_marcus_vance",
-                "allottedAt": "Oct 02, 2026",
-                "allotmentNotes": "Concierge biohacking protocol: deep sleep optimization, VO2 max & blood biomarkers",
-                "primaryGoal": "Biological age reversal, deep sleep optimization, VO2 max elite tier",
-                "healthConditions": ["Longevity", "Recovery Optimization", "Sleep Architecture"],
-                "dailyStepsAvg": 14200,
-                "calorieTarget": 2600,
-                "streakDays": 65,
-                "adherenceScore": 97,
-                "createdAt": "2026-05-10",
-                "lastActive": "Just now"
-            },
-            {
-                "id": "usr-4",
-                "name": "Rohan Varma",
-                "email": "rohan.varma@zomato.in",
-                "phone": "+91 99302 11982",
-                "subscriptionTier": "essential",
-                "consultationPlan": "essential",
-                "isPro": True,
-                "assignedCoach": "Arjun Nair",
-                "assignedCoachId": "coach_arjun_nair",
-                "allottedAt": "Oct 05, 2026",
-                "allotmentNotes": "Hypertrophy and daily macro adherence for muscle gain",
-                "primaryGoal": "Muscle hypertrophy (+4kg lean mass), habit consistency, strength training",
-                "healthConditions": ["General Fitness", "Postural Alignment"],
-                "dailyStepsAvg": 9400,
-                "calorieTarget": 2800,
-                "streakDays": 19,
-                "adherenceScore": 91,
-                "createdAt": "2026-08-01",
-                "lastActive": "1h ago"
-            },
-            {
-                "id": "usr-5",
-                "name": "Meera Chawla",
-                "email": "meera.chawla@deloitte.com",
-                "phone": "+91 98450 33214",
-                "subscriptionTier": "essential",
-                "consultationPlan": "essential",
-                "isPro": True,
-                "assignedCoach": None,
-                "assignedCoachId": None,
-                "primaryGoal": "Post-partum weight management, core restoration, daily 8k steps",
-                "healthConditions": ["Post-Partum Rehab", "Diastasis Recti"],
-                "dailyStepsAvg": 7600,
-                "calorieTarget": 1850,
-                "streakDays": 14,
-                "adherenceScore": 82,
-                "createdAt": "2026-08-18",
-                "lastActive": "3h ago"
-            },
-            {
-                "id": "usr-6",
-                "name": "Kabir Oberoi",
-                "email": "kabir.oberoi@gmail.com",
-                "phone": "+91 98210 77654",
-                "subscriptionTier": "pro",
-                "consultationPlan": None,
-                "isPro": True,
-                "assignedCoach": None,
-                "assignedCoachId": None,
-                "primaryGoal": "Self-serve tracking, marathon half-distance preparation",
-                "healthConditions": ["Endurance Training"],
-                "dailyStepsAvg": 16500,
-                "calorieTarget": 2900,
-                "streakDays": 51,
-                "adherenceScore": 95,
-                "createdAt": "2026-06-01",
-                "lastActive": "45m ago"
-            },
-            {
-                "id": "usr-7",
-                "name": "Shruti Iyer",
-                "email": "shruti.iyer@accenture.com",
-                "phone": "+91 97112 44321",
-                "subscriptionTier": "free",
-                "consultationPlan": None,
-                "isPro": False,
-                "assignedCoach": None,
-                "assignedCoachId": None,
-                "primaryGoal": "Basic calorie logging and steps consistency",
-                "healthConditions": ["Sedentary Lifestyle"],
-                "dailyStepsAvg": 5400,
-                "calorieTarget": 1600,
-                "streakDays": 6,
-                "adherenceScore": 68,
-                "createdAt": "2026-09-12",
-                "lastActive": "1d ago"
-            }
-        ]
-        store["sabtrack_crm_athletes"] = athletes
-        _save_store(store)
+
+    # Fetch live athletes directly from live Supabase / local DB if available
+    sb = get_track_supabase()
+    if sb and is_supabase_live():
+        try:
+            res = sb.from_("users").select("*").limit(100).execute()
+            if res.data:
+                existing_map = {str(a["id"]): a for a in athletes}
+                for u in res.data:
+                    uid = str(u.get("id"))
+                    sub_tier = u.get("subscription_tier") or ("pro" if u.get("is_pro") else "free")
+                    if uid not in existing_map:
+                        existing_map[uid] = {
+                            "id": uid,
+                            "name": u.get("name") or u.get("username") or "Athlete",
+                            "email": u.get("email") or "",
+                            "phone": u.get("phone") or "",
+                            "subscriptionTier": sub_tier,
+                            "consultationPlan": sub_tier if sub_tier in ["essential", "elite", "longevity"] else None,
+                            "isPro": bool(u.get("is_pro")),
+                            "assignedCoach": u.get("assigned_coach"),
+                            "assignedCoachId": u.get("assigned_coach_id"),
+                            "dailyStepsAvg": u.get("steps_goal") or 8500,
+                            "calorieTarget": u.get("calorie_goal") or 2200,
+                            "streakDays": u.get("streak_days") or 7,
+                            "adherenceScore": 85,
+                            "createdAt": u.get("created_at") or datetime.utcnow().isoformat(),
+                            "lastActive": "Active Today"
+                        }
+                    else:
+                        existing_map[uid]["isPro"] = bool(u.get("is_pro", existing_map[uid].get("isPro", False)))
+                        if u.get("assigned_coach"):
+                            existing_map[uid]["assignedCoach"] = u.get("assigned_coach")
+                athletes = list(existing_map.values())
+                store["sabtrack_crm_athletes"] = athletes
+                _save_store(store)
+                return athletes
+        except Exception as e:
+            logger.warning(f"Error querying live Supabase users for CRM: {e}")
+
     return athletes
 
 
@@ -942,54 +838,6 @@ def get_consultation_requests():
     store = _load_store()
     requests = store.get("consultation_requests", [])
 
-    if not requests:
-        requests = [
-            {
-                "id": "req-01",
-                "athleteId": "usr-1",
-                "athleteName": "Dr. Vikram Malhotra",
-                "athleteEmail": "vikram.malhotra@apollohospitals.org",
-                "athletePhone": "+91 98201 44512",
-                "planId": "elite",
-                "planName": "02 — ELITE (Specialised Health & Performance)",
-                "planPrice": "₹6,000/package",
-                "primaryGoals": "Hypertension control, HbA1c reduction (currently 6.8%), visceral adiposity protocol",
-                "status": "pending_placement",
-                "requestedAt": "Today at 10:45 AM"
-            },
-            {
-                "id": "req-02",
-                "athleteId": "usr-2",
-                "athleteName": "Ananya Deshmukh",
-                "athleteEmail": "ananya.d@techmahindra.com",
-                "athletePhone": "+91 97692 88210",
-                "planId": "essential",
-                "planName": "01 — ESSENTIAL (Fitness & Nutrition)",
-                "planPrice": "₹3,000/month",
-                "primaryGoals": "Sustainable 8kg fat loss, habit building, daily 8,000 steps consistency & vegetarian macros",
-                "status": "pending_placement",
-                "requestedAt": "Yesterday at 04:12 PM"
-            },
-            {
-                "id": "req-03",
-                "athleteId": "usr-3",
-                "athleteName": "Aditya Singhania",
-                "athleteEmail": "aditya@singhaniacapital.com",
-                "athletePhone": "+91 98110 55001",
-                "planId": "longevity",
-                "planName": "03 — LONGEVITY (Biohacking & Wellness)",
-                "planPrice": "Premium",
-                "primaryGoals": "Advanced biological age reversal, deep sleep optimization (Oura ring sync), VO2 max enhancement",
-                "status": "placed",
-                "placedCoachId": "coach_marcus_vance",
-                "placedCoachName": "Dr. Marcus Vance (Strength & Physiology)",
-                "placedAt": "Oct 11, 2026",
-                "requestedAt": "3 days ago"
-            }
-        ]
-        store["consultation_requests"] = requests
-        _save_store(store)
-
     return {
         "success": True,
         "count": len(requests),
@@ -1278,54 +1126,6 @@ def get_admin_coach_applications(
     """
     store = _load_store()
     applications = store.get("coach_applications", [])
-
-    if not applications:
-        applications = [
-            {
-                "id": "app-1",
-                "name": "Siddharth Mehra",
-                "email": "siddharth.mehra@fitstrength.io",
-                "phone": "+91 98201 44892",
-                "domain": "Strength & Conditioning",
-                "experienceYears": "5–8 Years",
-                "aboutWork": "Specialized in biomechanically sound resistance training, breaking strength plateaus, and structured progressive overload. Train competitive powerlifters and athletes seeking hypertrophy.",
-                "clientCount": 45,
-                "certifications": "CSCS (NSCA), ACE CPT, Precision Nutrition L1",
-                "portfolioUrl": "@coach.siddharth_m",
-                "status": "pending_review",
-                "appliedAt": "2 hours ago"
-            },
-            {
-                "id": "app-2",
-                "name": "Tanvi Deshmukh",
-                "email": "tanvi.nutrition@healthspace.in",
-                "phone": "+91 99302 77104",
-                "domain": "Clinical Nutrition & Dietetics",
-                "experienceYears": "6–8 Years",
-                "aboutWork": "Clinical dietitian working with women managing PCOS/PCOD, hypothyroidism, and insulin resistance. Focus on gut microbiome health and non-restrictive sustainable dietary protocols.",
-                "clientCount": 80,
-                "certifications": "M.Sc. Clinical Nutrition, Certified Diabetes Educator (CDE)",
-                "portfolioUrl": "linkedin.com/in/tanvi-deshmukh-rd",
-                "status": "pending_review",
-                "appliedAt": "5 hours ago"
-            },
-            {
-                "id": "app-3",
-                "name": "Dr. Naman Kashyap",
-                "email": "dr.naman@longevityperformance.org",
-                "phone": "+91 98110 55219",
-                "domain": "Longevity, Biomarkers & Healthspan",
-                "experienceYears": "9+ Years (Veteran)",
-                "aboutWork": "Sports medicine and healthspan practitioner. Focus on VO2 max testing, continuous glucose telemetry, lipid panel modulation, and sleep architecture optimization.",
-                "clientCount": 35,
-                "certifications": "MBBS, Sports Medicine Fellowship, American College of Sports Medicine (ACSM)",
-                "portfolioUrl": "dranamankashyap.com",
-                "status": "pending_review",
-                "appliedAt": "Yesterday"
-            }
-        ]
-        store["coach_applications"] = applications
-        _save_store(store)
 
     filtered = applications
     if status and status != "all":
