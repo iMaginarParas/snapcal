@@ -346,3 +346,27 @@ CREATE INDEX IF NOT EXISTS idx_coach_products_coach_id ON public.coach_products(
 CREATE INDEX IF NOT EXISTS idx_coach_checkins_coach_id ON public.coach_checkins(coach_id);
 CREATE INDEX IF NOT EXISTS idx_coach_messages_coach_id ON public.coach_messages(coach_id);
 
+-- 13. COACH PROFILES & DIRECTORY TABLE
+CREATE TABLE IF NOT EXISTS public.coach_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE,
+    phone TEXT,
+    role TEXT DEFAULT 'Coach',
+    title TEXT,
+    practice_name TEXT,
+    bio TEXT,
+    avatar TEXT,
+    rating NUMERIC(3,2) DEFAULT 5.0,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.coach_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "coach_profiles_all" ON public.coach_profiles;
+CREATE POLICY "coach_profiles_all" ON public.coach_profiles
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_coach_profiles_email ON public.coach_profiles(email);

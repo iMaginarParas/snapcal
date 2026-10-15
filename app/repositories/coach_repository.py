@@ -34,7 +34,12 @@ def _load_store() -> Dict[str, Any]:
     try:
         if os.path.exists(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                content = f.read().strip()
+                if content:
+                    return json.loads(content)
+                return {}
+    except json.JSONDecodeError:
+        return {}
     except Exception as e:
         logger.warning(f"Failed to read coach local store: {e}")
     return {}
@@ -79,6 +84,149 @@ def _normalize_discipline(coaching_type: str) -> str:
     return ct or "General"
 
 
+_TABLE_SCHEMAS = {
+    "coach_payments": {
+        "valid_columns": {
+            "id", "coach_id", "client_id", "client_name", "package_name",
+            "amount", "currency", "status", "due_date", "paid_date",
+            "invoice_number", "payment_method", "created_at"
+        },
+        "camel_map": {
+            "clientId": "client_id",
+            "clientName": "client_name",
+            "packageName": "package_name",
+            "productName": "package_name",
+            "dueDate": "due_date",
+            "paidDate": "paid_date",
+            "paidAt": "paid_date",
+            "invoiceNumber": "invoice_number",
+            "method": "payment_method",
+            "paymentMethod": "payment_method",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_clients": {
+        "valid_columns": {
+            "id", "coach_id", "name", "email", "phone", "avatar", "status",
+            "goal", "target_cals", "package", "join_date", "sabtrack_data",
+            "notes", "created_at", "updated_at"
+        },
+        "camel_map": {
+            "targetCals": "target_cals",
+            "joinDate": "join_date",
+            "sabtrackData": "sabtrack_data",
+            "createdAt": "created_at",
+            "updatedAt": "updated_at",
+        }
+    },
+    "coach_sessions": {
+        "valid_columns": {
+            "id", "coach_id", "client_id", "client_name", "client_avatar",
+            "title", "date", "time", "duration", "type", "status",
+            "location", "notes", "created_at"
+        },
+        "camel_map": {
+            "clientId": "client_id",
+            "clientName": "client_name",
+            "clientAvatar": "client_avatar",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_workouts": {
+        "valid_columns": {
+            "id", "coach_id", "client_id", "name", "description", "category",
+            "difficulty", "duration", "playlist_url", "exercises", "created_at"
+        },
+        "camel_map": {
+            "clientId": "client_id",
+            "playlistUrl": "playlist_url",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_programs": {
+        "valid_columns": {
+            "id", "coach_id", "name", "description", "duration_weeks",
+            "difficulty", "category", "schedule", "created_at"
+        },
+        "camel_map": {
+            "durationWeeks": "duration_weeks",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_leads": {
+        "valid_columns": {
+            "id", "coach_id", "name", "email", "phone", "stage", "goal",
+            "source", "value", "notes", "assigned_coach", "created_at"
+        },
+        "camel_map": {
+            "assignedCoach": "assigned_coach",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_checkins": {
+        "valid_columns": {
+            "id", "coach_id", "client_id", "client_name", "date", "status",
+            "weight", "energy", "stress", "sleep_hours", "notes", "created_at"
+        },
+        "camel_map": {
+            "clientId": "client_id",
+            "clientName": "client_name",
+            "sleepHours": "sleep_hours",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_messages": {
+        "valid_columns": {
+            "id", "coach_id", "client_id", "sender", "text", "timestamp", "created_at"
+        },
+        "camel_map": {
+            "clientId": "client_id",
+            "createdAt": "created_at",
+        }
+    },
+    "coach_profiles": {
+        "valid_columns": {
+            "id", "name", "email", "phone", "role", "title", "practice_name",
+            "bio", "avatar", "rating", "status", "created_at", "updated_at"
+        },
+        "camel_map": {
+            "practiceName": "practice_name",
+            "createdAt": "created_at",
+            "updatedAt": "updated_at",
+        }
+    }
+}
+
+
+def _sanitize_for_supabase(table: str, item: Dict[str, Any]) -> Dict[str, Any]:
+    schema = _TABLE_SCHEMAS.get(table)
+    if not schema:
+        return item
+    valid_cols = schema["valid_columns"]
+    camel_map = schema["camel_map"]
+
+    sanitized = {}
+    for k, v in item.items():
+        target_col = camel_map.get(k, k)
+        if target_col in valid_cols and target_col not in sanitized:
+            sanitized[target_col] = v
+        elif k in valid_cols and k not in sanitized:
+            sanitized[k] = v
+    return sanitized
+
+
+def _enrich_item(table: str, item: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        return item
+    enriched = dict(item)
+    schema = _TABLE_SCHEMAS.get(table)
+    if schema:
+        for camel, snake in schema["camel_map"].items():
+            if snake in enriched and camel not in enriched:
+                enriched[camel] = enriched[snake]
+    return enriched
+
+
 class CoachRepository:
     # --- Generic Table Helpers ---
     def _query_table(self, table: str, coach_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -90,24 +238,25 @@ class CoachRepository:
                     q = q.eq("coach_id", coach_id)
                 res = q.execute()
                 if res.data is not None and len(res.data) > 0:
-                    return res.data
+                    return [_enrich_item(table, x) for x in res.data]
             except Exception as e:
                 logger.warning(f"Supabase query failed for {table}: {e}")
 
         store = _load_store()
         table_data = store.get(table, [])
         if coach_id is not None:
-            return [item for item in table_data if item.get("coach_id") == coach_id]
-        return table_data
+            table_data = [item for item in table_data if item.get("coach_id") == coach_id]
+        return [_enrich_item(table, x) for x in table_data]
 
     def _upsert_item(self, table: str, item: Dict[str, Any]) -> Dict[str, Any]:
         saved_item = item
         sb = _get_supabase()
         if sb:
             try:
-                res = sb.from_(table).upsert(item).execute()
+                db_payload = _sanitize_for_supabase(table, item)
+                res = sb.from_(table).upsert(db_payload).execute()
                 if res.data and len(res.data) > 0:
-                    saved_item = res.data[0]
+                    saved_item = {**item, **res.data[0]}
             except Exception as e:
                 logger.warning(f"Supabase upsert failed for {table}: {e}")
 
@@ -120,7 +269,7 @@ class CoachRepository:
         else:
             table_data.insert(0, saved_item)
         _save_store(store)
-        return saved_item
+        return _enrich_item(table, saved_item)
 
     def _delete_item(self, table: str, item_id: str, coach_id: str) -> bool:
         sb = _get_supabase()
@@ -389,7 +538,8 @@ class CoachRepository:
         sb = _get_supabase()
         if sb:
             try:
-                sb.from_("coach_profiles").upsert(profile).execute()
+                db_payload = _sanitize_for_supabase("coach_profiles", profile)
+                sb.from_("coach_profiles").upsert(db_payload).execute()
             except Exception:
                 pass
         store = _load_store()
