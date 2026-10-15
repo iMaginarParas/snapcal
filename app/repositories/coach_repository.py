@@ -227,20 +227,29 @@ def _enrich_item(table: str, item: Dict[str, Any]) -> Dict[str, Any]:
     return enriched
 
 
+_MISSING_SUPABASE_TABLES: set = set()
+
+
 class CoachRepository:
     # --- Generic Table Helpers ---
     def _query_table(self, table: str, coach_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        sb = _get_supabase()
-        if sb:
-            try:
-                q = sb.from_(table).select("*")
-                if coach_id is not None:
-                    q = q.eq("coach_id", coach_id)
-                res = q.execute()
-                if res.data is not None and len(res.data) > 0:
-                    return [_enrich_item(table, x) for x in res.data]
-            except Exception as e:
-                logger.warning(f"Supabase query failed for {table}: {e}")
+        if table not in _MISSING_SUPABASE_TABLES:
+            sb = _get_supabase()
+            if sb:
+                try:
+                    q = sb.from_(table).select("*")
+                    if coach_id is not None:
+                        q = q.eq("coach_id", coach_id)
+                    res = q.execute()
+                    if res.data is not None and len(res.data) > 0:
+                        return [_enrich_item(table, x) for x in res.data]
+                except Exception as e:
+                    err_msg = str(e)
+                    if "PGRST205" in err_msg or "Could not find the table" in err_msg or "404" in err_msg:
+                        _MISSING_SUPABASE_TABLES.add(table)
+                        logger.info(f"Supabase table '{table}' not in schema cache; using local store.")
+                    else:
+                        logger.warning(f"Supabase query failed for {table}: {e}")
 
         store = _load_store()
         table_data = store.get(table, [])
@@ -250,15 +259,21 @@ class CoachRepository:
 
     def _upsert_item(self, table: str, item: Dict[str, Any]) -> Dict[str, Any]:
         saved_item = item
-        sb = _get_supabase()
-        if sb:
-            try:
-                db_payload = _sanitize_for_supabase(table, item)
-                res = sb.from_(table).upsert(db_payload).execute()
-                if res.data and len(res.data) > 0:
-                    saved_item = {**item, **res.data[0]}
-            except Exception as e:
-                logger.warning(f"Supabase upsert failed for {table}: {e}")
+        if table not in _MISSING_SUPABASE_TABLES:
+            sb = _get_supabase()
+            if sb:
+                try:
+                    db_payload = _sanitize_for_supabase(table, item)
+                    res = sb.from_(table).upsert(db_payload).execute()
+                    if res.data and len(res.data) > 0:
+                        saved_item = {**item, **res.data[0]}
+                except Exception as e:
+                    err_msg = str(e)
+                    if "PGRST205" in err_msg or "Could not find the table" in err_msg or "404" in err_msg:
+                        _MISSING_SUPABASE_TABLES.add(table)
+                        logger.info(f"Supabase table '{table}' not in schema cache; using local store.")
+                    else:
+                        logger.warning(f"Supabase upsert failed for {table}: {e}")
 
         store = _load_store()
         table_data = store.setdefault(table, [])
@@ -272,12 +287,17 @@ class CoachRepository:
         return _enrich_item(table, saved_item)
 
     def _delete_item(self, table: str, item_id: str, coach_id: str) -> bool:
-        sb = _get_supabase()
-        if sb:
-            try:
-                sb.from_(table).delete().eq("id", item_id).eq("coach_id", coach_id).execute()
-            except Exception as e:
-                logger.warning(f"Supabase delete failed for {table}: {e}")
+        if table not in _MISSING_SUPABASE_TABLES:
+            sb = _get_supabase()
+            if sb:
+                try:
+                    sb.from_(table).delete().eq("id", item_id).eq("coach_id", coach_id).execute()
+                except Exception as e:
+                    err_msg = str(e)
+                    if "PGRST205" in err_msg or "Could not find the table" in err_msg or "404" in err_msg:
+                        _MISSING_SUPABASE_TABLES.add(table)
+                    else:
+                        logger.warning(f"Supabase delete failed for {table}: {e}")
 
         store = _load_store()
         table_data = store.get(table, [])

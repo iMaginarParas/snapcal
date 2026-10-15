@@ -1,6 +1,33 @@
+import os
+import json
+import logging
 from typing import Dict, Any, List, Optional
-from app.database.supabase import supabase_client
 from datetime import datetime
+from app.database.supabase import supabase_client
+
+logger = logging.getLogger(__name__)
+
+_DAILY_STATS_FILE = os.path.join(os.path.dirname(__file__), "../../../data/daily_stats.json")
+
+
+def _load_daily_stats_store() -> List[Dict[str, Any]]:
+    try:
+        if os.path.exists(_DAILY_STATS_FILE):
+            with open(_DAILY_STATS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+
+def _save_daily_stats_store(data: List[Dict[str, Any]]):
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(_DAILY_STATS_FILE)), exist_ok=True)
+        with open(_DAILY_STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, default=str)
+    except Exception:
+        pass
+
 
 class DBRepository:
     """Centralized database repository handling all Supabase queries."""
@@ -71,32 +98,61 @@ class DBRepository:
 
     # --- Daily Stats ---
     def get_daily_stats(self, user_id: str, date_str: str) -> Optional[Dict[str, Any]]:
-        try:
-            if not supabase_client:
-                return None
-            res = supabase_client.from_("daily_stats").select("*").eq("user_id", user_id).eq("date", date_str).maybe_single().execute()
-            return res.data if res else None
-        except Exception:
-            return None
+        uid_str = str(user_id)
+        if supabase_client:
+            try:
+                res = supabase_client.from_("daily_stats").select("*").eq("user_id", uid_str).eq("date", date_str).maybe_single().execute()
+                if res and res.data:
+                    return res.data
+            except Exception:
+                pass
+        # Fallback to local store
+        store = _load_daily_stats_store()
+        return next((x for x in store if str(x.get("user_id")) == uid_str and x.get("date") == date_str), None)
 
     def create_daily_stats(self, stats: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            if not supabase_client:
-                return stats
-            res = supabase_client.from_("daily_stats").insert(stats).execute()
-            return res.data[0] if res and res.data else stats
-        except Exception:
-            return stats
+        saved_stats = dict(stats)
+        uid_str = str(stats.get("user_id", ""))
+        date_str = str(stats.get("date", ""))
+        if supabase_client:
+            try:
+                res = supabase_client.from_("daily_stats").insert(stats).execute()
+                if res and res.data:
+                    saved_stats = res.data[0]
+            except Exception:
+                pass
+        # Always persist in local store
+        store = _load_daily_stats_store()
+        idx = next((i for i, x in enumerate(store) if str(x.get("user_id")) == uid_str and str(x.get("date")) == date_str), None)
+        if idx is not None:
+            store[idx] = {**store[idx], **saved_stats}
+        else:
+            store.insert(0, saved_stats)
+        _save_daily_stats_store(store)
+        return saved_stats
 
     def update_daily_stats(self, user_id: str, date_str: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            if not supabase_client:
-                return updates
-            res = supabase_client.from_("daily_stats").update(updates).eq("user_id", user_id).eq("date", date_str).execute()
-            return res.data[0] if res and res.data else updates
-        except Exception:
-            return updates
-        return res.data[0] if res and res.data else {}
+        uid_str = str(user_id)
+        saved_updates = dict(updates)
+        if supabase_client:
+            try:
+                res = supabase_client.from_("daily_stats").update(updates).eq("user_id", uid_str).eq("date", date_str).execute()
+                if res and res.data:
+                    saved_updates = res.data[0]
+            except Exception:
+                pass
+        # Always update local store
+        store = _load_daily_stats_store()
+        idx = next((i for i, x in enumerate(store) if str(x.get("user_id")) == uid_str and str(x.get("date")) == date_str), None)
+        if idx is not None:
+            store[idx] = {**store[idx], **saved_updates}
+            _save_daily_stats_store(store)
+            return store[idx]
+        else:
+            merged = {"user_id": uid_str, "date": date_str, **saved_updates}
+            store.insert(0, merged)
+            _save_daily_stats_store(store)
+            return merged
 
     # --- Measurements ---
     def get_measurements(self, user_id: str, metric_type: Optional[str] = None) -> List[Dict[str, Any]]:

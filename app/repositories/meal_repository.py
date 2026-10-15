@@ -1,10 +1,21 @@
 import json
 import os
+import uuid
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_uuid(val: Any) -> bool:
+    if not val:
+        return False
+    try:
+        uuid.UUID(str(val).strip())
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 # File-based persistence path (survives server restarts when Supabase isn't configured)
 _MEALS_FILE = os.path.join(os.path.dirname(__file__), "../../../data/meals.json")
@@ -145,33 +156,53 @@ class MealRepository:
         return db_items
 
     def get_meals_by_date(self, user_id: str, date_str: str) -> List[Dict[str, Any]]:
-        uid_str = str(user_id).lower()
+        raw_uid = str(user_id).strip()
+        uid_str = raw_uid.lower()
+
+        # Try to resolve non-UUID client ID (e.g. cl_... or c-...) to athlete user UUID
+        target_supabase_uuid: Optional[str] = None
+        if _is_valid_uuid(raw_uid):
+            target_supabase_uuid = raw_uid
+        else:
+            try:
+                from app.repositories.coach_repository import coach_repository
+                cl = coach_repository.get_client(raw_uid)
+                if cl:
+                    cand = cl.get("user_id") or cl.get("userId")
+                    if cand and _is_valid_uuid(cand):
+                        target_supabase_uuid = str(cand).strip()
+            except Exception:
+                pass
 
         # Always reload local store to get fresh entries
         self._in_memory_meals = _load_json_store(_MEALS_FILE)
         self._in_memory_food_items = _load_json_store(_FOOD_ITEMS_FILE)
 
-        # 1. Try Supabase
+        # 1. Try Supabase ONLY if we have a valid UUID
         db_meals = []
         supabase = _get_supabase()
-        if supabase:
+        if supabase and target_supabase_uuid:
             try:
                 res = (
                     supabase.from_("meals")
                     .select("*, food_items(*)")
-                    .eq("user_id", str(user_id))
+                    .eq("user_id", target_supabase_uuid)
                     .gte("logged_at", f"{date_str}T00:00:00.000Z")
                     .lte("logged_at", f"{date_str}T23:59:59.999Z")
                     .execute()
                 )
                 db_meals = res.data if res and res.data else []
             except Exception as e:
-                logger.error(f"Supabase get_meals_by_date failed: {e}")
+                logger.debug(f"Supabase get_meals_by_date failed: {e}")
 
         # 2. Merge with local store (avoids duplicates by ID)
+        match_uids = {uid_str}
+        if target_supabase_uuid:
+            match_uids.add(target_supabase_uuid.lower())
+
         mem_meals = [
             m for m in self._in_memory_meals
-            if str(m.get("user_id", "")).lower() == uid_str
+            if (str(m.get("user_id", "")).lower() in match_uids or str(m.get("client_id", "")).lower() in match_uids)
             and (
                 str(m.get("logged_at", "")).startswith(date_str)
                 or str(m.get("date", "")).startswith(date_str)
@@ -195,26 +226,29 @@ class MealRepository:
         return combined
 
     def get_meal_history(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
-        uid_str = str(user_id)
+        raw_uid = str(user_id).strip()
+        uid_str = raw_uid.lower()
+        target_supabase_uuid: Optional[str] = raw_uid if _is_valid_uuid(raw_uid) else None
+
         db_meals = []
         supabase = _get_supabase()
-        if supabase:
+        if supabase and target_supabase_uuid:
             try:
                 res = (
                     supabase.from_("meals")
                     .select("*, food_items(*)")
-                    .eq("user_id", uid_str)
+                    .eq("user_id", target_supabase_uuid)
                     .order("logged_at", desc=True)
                     .range(offset, offset + limit - 1)
                     .execute()
                 )
                 db_meals = res.data if res and res.data else []
             except Exception as e:
-                logger.error(f"Supabase get_meal_history failed: {e}")
+                logger.debug(f"Supabase get_meal_history failed: {e}")
 
         mem_meals = [
             m for m in self._in_memory_meals
-            if str(m.get("user_id")) == uid_str
+            if str(m.get("user_id", "")).lower() == uid_str or (target_supabase_uuid and str(m.get("user_id", "")).lower() == target_supabase_uuid.lower())
         ]
 
         seen_ids: set = set()
@@ -239,13 +273,13 @@ class MealRepository:
         _save_json_store(_FOOD_ITEMS_FILE, self._in_memory_food_items)
 
         supabase = _get_supabase()
-        if supabase:
+        if supabase and _is_valid_uuid(user_id):
             try:
                 supabase.from_("food_items").delete().eq("meal_id", meal_id).execute()
                 res = supabase.from_("meals").delete().eq("id", meal_id).eq("user_id", str(user_id)).execute()
                 return bool(res.data) if res else True
             except Exception as e:
-                logger.error(f"Supabase delete_meal failed: {e}")
+                logger.debug(f"Supabase delete_meal failed: {e}")
         return True
 
     # --- Meal Templates ---

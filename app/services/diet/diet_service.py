@@ -88,8 +88,23 @@ class DietService:
         """
         today_date = date_str or datetime.utcnow().strftime("%Y-%m-%d")
         
+        # Resolve client_id to linked athlete user_id if present
+        linked_user_id = client_id
+        try:
+            from app.repositories.coach_repository import coach_repository
+            cl = coach_repository.get_client(client_id)
+            if cl:
+                cand = cl.get("user_id") or cl.get("userId")
+                if cand:
+                    linked_user_id = str(cand).strip()
+        except Exception:
+            pass
+
         # 1. Prescribed plan
-        prescribed_plan = diet_plan_repository.get_client_today_plan(client_id, today_date) or {}
+        prescribed_plan = diet_plan_repository.get_client_today_plan(client_id, today_date)
+        if not prescribed_plan and linked_user_id != client_id:
+            prescribed_plan = diet_plan_repository.get_client_today_plan(linked_user_id, today_date)
+        prescribed_plan = prescribed_plan or {}
         target_calories = int(prescribed_plan.get("total_calories") or 2000)
         target_protein = float(prescribed_plan.get("protein_g") or 140.0)
         target_carbs = float(prescribed_plan.get("carbs_g") or 200.0)
@@ -97,7 +112,7 @@ class DietService:
         target_water = float(prescribed_plan.get("water_liters") or 3.0)
 
         # 2. Actual logged meals from SabTrack
-        actual_summary = nutrition_repo.get_daily_summary(client_id, today_date)
+        actual_summary = nutrition_repo.get_daily_summary(linked_user_id, today_date)
         actual_calories = int(actual_summary.get("calories") or 0)
         actual_protein = float(actual_summary.get("protein") or 0.0)
         actual_carbs = float(actual_summary.get("carbs") or 0.0)
