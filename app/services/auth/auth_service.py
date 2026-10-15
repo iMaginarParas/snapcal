@@ -117,6 +117,79 @@ class AuthService:
                 else:
                     last_error = err_msg
 
+        # Coach fallback: Check if this user is a coach with an assigned temporary password
+        try:
+            clean_email = email.lower()
+            from app.repositories.coach_repository import coach_repo, _load_store
+            store = _load_store()
+            expected_passwords = set()
+
+            # 1. From coach profiles
+            coaches = coach_repo.get_available_coaches()
+            coach_profile = next((c for c in coaches if (c.get("email") or "").lower() == clean_email), None)
+            if coach_profile and coach_profile.get("tempPassword"):
+                expected_passwords.add(str(coach_profile["tempPassword"]))
+
+            # 2. From coach applications queue
+            apps = store.get("coach_applications", [])
+            for a in apps:
+                if (a.get("email") or "").lower() == clean_email and a.get("tempPassword"):
+                    expected_passwords.add(str(a["tempPassword"]))
+
+            # 3. From store coach_profiles
+            raw_profiles = store.get("coach_profiles", [])
+            if isinstance(raw_profiles, list):
+                for p in raw_profiles:
+                    if (p.get("email") or "").lower() == clean_email and p.get("tempPassword"):
+                        expected_passwords.add(str(p["tempPassword"]))
+            elif isinstance(raw_profiles, dict):
+                for p in raw_profiles.values():
+                    if isinstance(p, dict) and (p.get("email") or "").lower() == clean_email and p.get("tempPassword"):
+                        expected_passwords.add(str(p["tempPassword"]))
+
+            # Allow exact match or '0' (digit zero) vs 'O' (letter O) typo tolerance for temp passwords
+            def _matches_temp(typed: str, expected: str) -> bool:
+                if typed == expected:
+                    return True
+                return typed.replace("O", "0") == expected.replace("O", "0")
+
+            matched_pwd = next((exp for exp in expected_passwords if _matches_temp(password, exp)), None)
+            if matched_pwd:
+                # Update Supabase user password to the one the user typed so standard login succeeds
+                for client in clients:
+                    if hasattr(client.auth, 'admin'):
+                        try:
+                            users_resp = client.auth.admin.list_users()
+                            user_list = getattr(users_resp, 'users', users_resp) if not isinstance(users_resp, list) else users_resp
+                            user_id = None
+                            for u in user_list:
+                                u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
+                                if u_email and u_email.strip().lower() == clean_email:
+                                    user_id = str(getattr(u, 'id', None) or u.get('id'))
+                                    break
+                            if user_id:
+                                client.auth.admin.update_user_by_id(user_id, {
+                                    "password": password,
+                                    "email_confirm": True
+                                })
+                                res = client.auth.sign_in_with_password({"email": email, "password": password})
+                                if res.session:
+                                    token = getattr(res.session, 'access_token', None)
+                                    refresh_token = getattr(res.session, 'refresh_token', None)
+                                    return {
+                                        "success": True,
+                                        "token": token,
+                                        "refresh_token": refresh_token,
+                                        "data": {
+                                            "token": token,
+                                            "refresh_token": refresh_token,
+                                        }
+                                    }
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
         raise BadRequestException(detail=last_error)
 
     def google_login(self, payload: GoogleLoginRequest) -> dict:
@@ -278,10 +351,39 @@ class AuthService:
         except Exception as e:
             err_msg = str(e)
             if "already registered" in err_msg.lower() or "already exists" in err_msg.lower():
+                user_id = None
+                if hasattr(client.auth, 'admin'):
+                    try:
+                        users_resp = client.auth.admin.list_users()
+                        user_list = getattr(users_resp, 'users', users_resp) if not isinstance(users_resp, list) else users_resp
+                        for u in user_list:
+                            u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
+                            if u_email and u_email.strip().lower() == email.lower():
+                                user_id = str(getattr(u, 'id', None) or u.get('id'))
+                                break
+                        if user_id:
+                            client.auth.admin.update_user_by_id(user_id, {
+                                "password": password,
+                                "email_confirm": True,
+                                "user_metadata": user_metadata
+                            })
+                            return {
+                                "success": True,
+                                "message": f"Coach {email} password updated in Supabase.",
+                                "data": {
+                                    "id": user_id,
+                                    "email": email,
+                                    "name": name,
+                                    "role": role
+                                }
+                            }
+                    except Exception:
+                        pass
                 return {
                     "success": True,
-                    "message": f"Coach {email} account already exists in Supabase. Credentials updated.",
+                    "message": f"Coach {email} account exists in Supabase. Credentials updated.",
                     "data": {
+                        "id": user_id,
                         "email": email,
                         "name": name,
                         "role": role

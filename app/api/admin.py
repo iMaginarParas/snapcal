@@ -1207,11 +1207,24 @@ def approve_coach_application(
 
     target["status"] = "approved"
     target["reviewedAt"] = datetime.utcnow().strftime("%b %d, %Y")
+    temp_pass = (body or {}).get("tempPassword") or f"SC-{int(datetime.utcnow().timestamp())}!9"
+    target["tempPassword"] = temp_pass
     _save_store(store)
+
+    # Provision credentials directly into Supabase Auth
+    try:
+        auth_service.provision_coach(
+            email=target["email"],
+            password=temp_pass,
+            name=target["name"],
+            role=target.get("domain", "Coach"),
+            practice_name=f"{target['name']}'s Practice"
+        )
+    except Exception as e:
+        logger.warning(f"Auth provision in approve application note: {e}")
 
     # Provision coach profile into store & database
     coach_id = f"coach_{target['name'].lower().replace(' ', '_')}"
-    temp_pass = (body or {}).get("tempPassword") or f"SC-{int(datetime.utcnow().timestamp())}!9"
 
     new_coach = {
         "id": coach_id,
