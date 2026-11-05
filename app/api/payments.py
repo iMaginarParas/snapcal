@@ -13,6 +13,7 @@ from app.schemas.payments import (
     SubscriptionStatusResponse,
     ApplyPromoRequest,
     ApplyPromoResponse,
+    VerifyApplePaymentRequest,
 )
 from app.services.payment_service import PaymentService
 
@@ -68,6 +69,27 @@ def verify_payment(
     except Exception as e:
         logger.error(f"Error verifying payment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error during verification")
+
+
+@router.post("/verify-apple", response_model=VerifyPaymentResponse)
+def verify_apple_payment(
+    payload: VerifyApplePaymentRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Verify Apple StoreKit In-App Purchase and activate Pro subscription."""
+    try:
+        res = PaymentService.verify_apple_payment(
+            user_id=user_id,
+            product_id=payload.product_id,
+            transaction_id=payload.transaction_id,
+            receipt_data=payload.receipt_data,
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error verifying Apple payment: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during Apple verification")
 
 
 @router.get("/status", response_model=SubscriptionStatusResponse)

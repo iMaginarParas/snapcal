@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header
 from typing import Optional
 from pydantic import BaseModel
-from app.schemas.auth import SignupRequest, LoginRequest, GoogleLoginRequest
+from app.schemas.auth import SignupRequest, LoginRequest, GoogleLoginRequest, AppleLoginRequest
 from app.services.auth.auth_service import auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -27,6 +27,10 @@ def auth_login(payload: LoginRequest):
 @router.post("/google-login")
 def auth_google_login(payload: GoogleLoginRequest):
     return auth_service.google_login(payload)
+
+@router.post("/apple-login")
+def auth_apple_login(payload: AppleLoginRequest):
+    return auth_service.apple_login(payload)
 
 @router.get("/oauth/google-url")
 def auth_google_oauth_url(redirect_to: str):

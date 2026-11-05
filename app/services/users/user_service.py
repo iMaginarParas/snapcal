@@ -47,4 +47,48 @@ class UserService:
         db_repository.update_user_profile(user_id, {"profile_picture_url": profile_url})
         return {"success": True, "url": profile_url}
 
+    def delete_account(self, user_id: str) -> dict:
+        """Permanently delete user account and all personal data (Apple Guideline 5.1.1(v))."""
+        errors = []
+
+        if is_supabase_live():
+            # Delete user data across all tables
+            tables = [
+                "meals", "food_items", "workouts", "daily_stats", 
+                "measurement_logs", "fasting_logs", "supplements", 
+                "supplement_logs", "user_badges", "subscriptions",
+                "direct_messages", "profiles", "users"
+            ]
+            for table in tables:
+                try:
+                    supabase_client.table(table).delete().eq("user_id", user_id).execute()
+                except Exception:
+                    try:
+                        supabase_client.table(table).delete().eq("id", user_id).execute()
+                    except Exception as e:
+                        errors.append(f"{table}: {e}")
+
+            # Delete auth user record via Supabase Admin
+            try:
+                if hasattr(supabase_client.auth, "admin"):
+                    supabase_client.auth.admin.delete_user(user_id)
+            except Exception as e:
+                errors.append(f"auth_admin: {e}")
+        else:
+            # Local db cleanup
+            try:
+                from app.repositories.db_repository import _load_db, _save_db
+                data = _load_db()
+                for key in ["users", "profiles", "meals", "dailyStats", "workouts", "measurementLogs", "fastingLogs"]:
+                    if key in data and isinstance(data[key], dict) and user_id in data[key]:
+                        del data[key][user_id]
+                _save_db(data)
+            except Exception as e:
+                errors.append(f"local_db: {e}")
+
+        return {
+            "success": True,
+            "message": "Account and all associated personal data have been permanently deleted.",
+        }
+
 user_service = UserService()

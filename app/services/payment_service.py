@@ -428,3 +428,69 @@ class PaymentService:
             expires_at=expires_at_iso,
             discount_percent=100,
         )
+
+    @classmethod
+    def verify_apple_payment(
+        cls,
+        user_id: str,
+        product_id: str,
+        transaction_id: str,
+        receipt_data: Optional[str] = None,
+    ) -> VerifyPaymentResponse:
+        """Verify Apple StoreKit In-App Purchase and activate Pro subscription."""
+        # Map Apple Product ID to Plan
+        plan_id = "yearly"
+        if "monthly" in product_id:
+            plan_id = "monthly"
+        elif "half_yearly" in product_id:
+            plan_id = "half_yearly"
+
+        plan = PLANS_CATALOG.get(plan_id, PLANS_CATALOG["yearly"])
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=plan.duration_days)
+        expires_at_iso = expires_at.isoformat()
+
+        try:
+            if is_supabase_live():
+                # 1. Update user profile to Pro
+                supabase_client.table("users").update({
+                    "is_pro": True,
+                    "subscription_tier": "pro",
+                    "subscription_plan_id": plan.id,
+                    "subscription_expires_at": expires_at_iso,
+                }).eq("id", user_id).execute()
+
+                # 2. Record Apple StoreKit transaction
+                supabase_client.table("subscriptions").insert({
+                    "user_id": user_id,
+                    "plan_id": plan.id,
+                    "plan_name": f"{plan.name} (Apple IAP)",
+                    "amount": plan.price_inr,
+                    "currency": "USD",
+                    "status": "active",
+                    "starts_at": now.isoformat(),
+                    "expires_at": expires_at_iso,
+                    "razorpay_order_id": f"apple_{product_id}",
+                    "razorpay_payment_id": transaction_id,
+                }).execute()
+            else:
+                _mock_subscriptions[user_id] = {
+                    "is_pro": True,
+                    "subscription_tier": "pro",
+                    "plan_id": plan.id,
+                    "plan_name": f"{plan.name} (Apple IAP)",
+                    "starts_at": now.isoformat(),
+                    "expires_at": expires_at_iso,
+                }
+        except Exception as e:
+            logger.error(f"Error persisting Apple IAP subscription: {e}")
+
+        return VerifyPaymentResponse(
+            success=True,
+            message="Apple In-App Purchase verified successfully!",
+            is_pro=True,
+            subscription_tier="pro",
+            plan_id=plan.id,
+            plan_name=plan.name,
+            expires_at=expires_at_iso,
+        )

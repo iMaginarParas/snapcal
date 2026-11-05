@@ -42,6 +42,13 @@ def update_nutrition_goals(payload: NutritionGoalsPayload, user_id: str = Depend
     return {"success": True, "data": res}
 
 
+@router.delete("/account")
+@router.delete("/me")
+def delete_account(user_id: str = Depends(get_current_user_id)):
+    """Permanently delete user account and all personal data (Apple Guideline 5.1.1(v))."""
+    return user_service.delete_account(user_id)
+
+
 # Plural routes
 users_plural_router = APIRouter(prefix="/users", tags=["Users"])
 

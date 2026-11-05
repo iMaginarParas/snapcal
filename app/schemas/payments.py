@@ -78,6 +78,15 @@ class ApplyPromoResponse(BaseModel):
     message: str
     is_pro: bool
     subscription_tier: str
+    plan_id: Optional[str] = None
+    plan_name: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+class VerifyApplePaymentRequest(BaseModel):
+    product_id: str
+    transaction_id: str
+    receipt_data: Optional[str] = None
     plan_id: str
     plan_name: str
     expires_at: str
