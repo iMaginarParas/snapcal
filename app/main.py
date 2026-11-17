@@ -91,6 +91,34 @@ def serve_privacy_page():
     return HTMLResponse("<h1>Privacy Policy Page</h1>")
 
 
+@app.get("/terms", response_class=HTMLResponse)
+@app.get("/terms.html", response_class=HTMLResponse)
+def serve_terms_page():
+    html_path = os.path.join(STATIC_DIR, "terms.html")
+    if os.path.exists(html_path):
+        return FileResponse(html_path)
+    return HTMLResponse("<h1>Terms of Service Page</h1>")
+
+
+@app.get("/.well-known/apple-app-site-association")
+@app.get("/apple-app-site-association")
+def serve_apple_app_site_association():
+    return {
+        "applinks": {
+            "apps": [],
+            "details": [
+                {
+                    "appID": "MSK2R73A5A.com.sabtrack.ai",
+                    "paths": ["*", "/join-group*", "/invite*"]
+                }
+            ]
+        },
+        "webcredentials": {
+            "apps": ["MSK2R73A5A.com.sabtrack.ai"]
+        }
+    }
+
+
 @app.get("/join-group", response_class=HTMLResponse)
 @app.get("/api/join-group", response_class=HTMLResponse)
 def serve_join_group_landing_page(code: str = ""):
